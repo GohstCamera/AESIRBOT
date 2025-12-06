@@ -1,0 +1,25 @@
+# Dépendances
+/node_modules
+
+# Secrets et Configuration (CRITIQUE : Ne jamais commiter le token)
+.env
+config.json
+
+# Fichiers de logs et de cache
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+/logs
+
+# Fichiers de build/distribution
+/dist
+/build
+
+# Fichiers spécifiques au système ou à l'IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+/generated/prisma
+/prisma
