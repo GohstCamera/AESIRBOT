@@ -156,7 +156,7 @@ module.exports = {
                 `${item.description} | +${item.givesDiamants} 💎 Clan & +${item.givesNotoriety} Notoriété.`;
             
             return new StringSelectMenuOptionBuilder()
-                .setLabel(`${item.name} (${item.price}€)`)
+                .setLabel(`${item.name} (${item.price}${item.currency === 'diamants' ? '💎' : '€'})`)
                 .setDescription(detailDescription.substring(0, 100)) // Limiter à 100 caractères
                 .setValue(item.id)
                 .setEmoji(item.emoji || '🛒')

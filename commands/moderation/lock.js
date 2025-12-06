@@ -30,7 +30,7 @@ module.exports = {
         }
 
         try {
-            await interaction.deferReply();
+            await interaction.deferReply({ ephemeral: true });
 
             const shouldLock = interaction.options.getBoolean('state');
             const channel = interaction.channel;

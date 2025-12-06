@@ -85,8 +85,8 @@ module.exports = {
             
             // 2. Cooldown
             const now = Date.now();
-            if (user.cardCooldown && now < user.cardCooldown.getTime()) {
-                const timeLeftHours = Math.ceil((user.cardCooldown.getTime() - now) / 3600000);
+            if (user.cardCooldown && now < new Date(user.cardCooldown).getTime()) {
+                const timeLeftHours = Math.ceil((new Date(user.cardCooldown).getTime() - now) / 3600000);
                 return interaction.editReply({ content: `⏳ Tu dois attendre encore **${timeLeftHours} heures** pour générer une nouvelle carte.` });
             }
 

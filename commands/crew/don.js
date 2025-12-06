@@ -112,7 +112,7 @@ module.exports = {
 
                 // 2.3. VÉRIFICATION DU COMPTEUR QUOTIDIEN ET RÉINITIALISATION
                 const today = new Date().toDateString();
-                const lastDonationDay = user.lastDonationDate.toDateString();
+                const lastDonationDay = user.lastDonationDate ? new Date(user.lastDonationDate).toDateString() : new Date().toDateString();
                 let dailyDonationCount = user.dailyDonationCount;
 
                 // Si le dernier don n'était pas aujourd'hui, réinitialiser le compteur

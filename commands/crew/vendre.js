@@ -67,7 +67,7 @@ module.exports = {
             const updateCrewData = {};
             updateCrewData[resourceToSell] = { decrement: quantityToSell };
 
-            await prisma.$transaction([
+            const [, updatedUser] = await prisma.$transaction([
                 // Déduction des ressources du clan
                 prisma.crew.update({
                     where: { id: user.crew.id },
@@ -86,7 +86,7 @@ module.exports = {
                 .setDescription(`Tu as vendu **${quantityToSell}** ${resourceToSell} et ton clan a gagné **${totalGain}€** !`)
                 .setColor('#F1C40F')
                 .addFields(
-                    { name: 'Nouveau Solde', value: `**${(user.balance + totalGain).toLocaleString()}€**` }
+                    { name: 'Nouveau Solde', value: `**${(updatedUser.balance).toLocaleString()}€**` }
                 )
                 .setTimestamp();
 

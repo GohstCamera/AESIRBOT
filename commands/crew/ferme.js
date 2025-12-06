@@ -30,8 +30,8 @@ module.exports = {
             }
 
             const now = Date.now();
-            if (user.farmCooldown && now < user.farmCooldown.getTime()) {
-                const timeLeft = Math.ceil((user.farmCooldown.getTime() - now) / 1000);
+            if (user.farmCooldown && now < new Date(user.farmCooldown).getTime()) {
+                const timeLeft = Math.ceil((new Date(user.farmCooldown).getTime() - now) / 1000);
                 const minutes = Math.floor(timeLeft / 60);
                 const seconds = timeLeft % 60;
                 return interaction.editReply({
@@ -45,7 +45,7 @@ module.exports = {
             const harvestBonusEndTime = user.crew.harvestBonusEndTime;
 
             // Vérifie le bonus de récolte
-            if (harvestBonusEndTime && now < harvestBonusEndTime.getTime()) {
+            if (harvestBonusEndTime && now < new Date(harvestBonusEndTime).getTime()) {
                 bonusApplied = true;
             }
 

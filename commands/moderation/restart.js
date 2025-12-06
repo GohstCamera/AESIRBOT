@@ -13,7 +13,7 @@ module.exports = {
         if (interaction.user.id !== process.env.OWNER_ID) {
             return interaction.reply({
                 content: '❌ Vous n\'avez pas la permission d\'exécuter cette commande.',
-                flags: [ 1 << 6 ] // MessageFlags.Ephemeral
+                ephemeral: true
             });
         }
 

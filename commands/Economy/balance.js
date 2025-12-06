@@ -33,7 +33,7 @@ module.exports = {
                     data: {
                         id: userId,
                         balance: initialBalance,
-                        last_daily: new Date(0), // Set to a very old date so they can use /daily immediately
+                        last_daily: null, // Set to null so they can use /daily immediately
                     },
                     select: { balance: true }
                 });

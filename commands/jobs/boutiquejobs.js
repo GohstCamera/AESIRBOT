@@ -91,7 +91,7 @@ module.exports = {
         await interaction.reply({
             embeds: [embed],
             components: [piochesRow, wagonsRow, jobsRow],
-            ephemeral: false,
+            ephemeral: true,
         });
     },
 };

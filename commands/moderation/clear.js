@@ -25,7 +25,7 @@ module.exports = {
         if (!hasPermission(interaction, ['ModerateMembers'])) {
             return interaction.reply({
                 content: '❌ Tu n’as pas la permission d’utiliser cette commande.',
-                flags: [ 1 << 6 ]
+                ephemeral: true
             });
         }
 
@@ -79,7 +79,7 @@ module.exports = {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({ content: errorMessage });
             } else {
-                await interaction.reply({ content: errorMessage, flags: [ 1 << 6 ] });
+                await interaction.reply({ content: errorMessage, ephemeral: true });
             }
         }
     },

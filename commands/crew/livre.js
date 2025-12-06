@@ -79,7 +79,7 @@ async function generateBookPage(userId, pageIndex) {
         const quantity = ownedCardsMap.get(currentCard.id);
         const isOwned = quantity !== undefined;
         
-        const rarityStars = currentCard.rarity.split(' ')[0]; 
+        const rarityStars = currentCard.rarity ? currentCard.rarity.split(' ')[0] : '?'; 
 
         let descriptionContent = "";
         let cardImageFilePath = "";

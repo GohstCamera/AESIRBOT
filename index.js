@@ -1,8 +1,8 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, Collection, Events, REST, Routes, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, Events, REST, Routes, ActivityType } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const { PrismaClient } = require('@prisma/client'); 
+const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 // --- Importation du chargeur de plugins ---
@@ -113,7 +113,7 @@ client.once(Events.ClientReady, async () => {
 
     // 🔄 Status dynamique
     const statuses = [
-        { name: '/aesir', type: 0 }
+        { name: '/aesir', type: ActivityType.Playing }
     ];
     let index = 0;
     setInterval(() => {
@@ -194,8 +194,6 @@ client.on(Events.InteractionCreate, async interaction => {
         const time = now.toLocaleTimeString('fr-FR');
         console.log(`[${time}] ${interaction.user.tag} a utilisé /${interaction.commandName} sur ${interaction.guild?.name || 'DM'}`);
 
-        const hasPermission = require('./utils/hasPermission');
-
         try {
             // La logique de permission est maintenant gérée directement dans les commandes
             // ou par les permissions par défaut de la commande.
@@ -268,7 +266,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
         console.log(`[DEBUG-ROUTER] Interaction personnalisée. CustomID: ${interaction.customId}.`);
 
-        let handlerKey = null;
+        let handlerKey;
 
         if (interaction.isModalSubmit() && interaction.customId === 'create_crew_modal') {
             // Routage forcé vers le handler 'crew' pour la création de clan (exemple)
@@ -310,7 +308,7 @@ client.on(Events.InteractionCreate, async interaction => {
 });
 
 // 🔑 Connexion du bot
-client.login(process.env.DISCORD_TOKEN);
+client.login(process.env.DISCORD_TOKEN).catch(console.error);
 
 // =======================================================
 // --- GESTION DE L'ARRÊT PROPRE (GRACEFUL SHUTDOWN) ---

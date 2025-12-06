@@ -31,7 +31,6 @@ module.exports = {
 
     async execute(interaction) {
         const requiredRoleId = '1002927692489969724';
-        const hasPermission = require('../../../utils/hasPermission');
         const hasPermission = require('../../utils/hasPermission');
 
         // Vérifie si l'utilisateur a le rôle requis OU s'il est un administrateur/propriétaire

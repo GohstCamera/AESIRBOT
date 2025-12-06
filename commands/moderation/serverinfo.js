@@ -31,6 +31,14 @@ module.exports = {
             // On utilise deferReply pour une réponse immédiate
             await interaction.deferReply();
 
+            const verificationLevels = {
+                0: 'Aucun',
+                1: 'Faible',
+                2: 'Moyen',
+                3: 'Élevé',
+                4: 'Très élevé'
+            };
+
             const embed = new EmbedBuilder()
                 .setTitle(`🌐 Infos sur ${guild.name}`)
                 .setColor('#2f3136')
@@ -41,7 +49,7 @@ module.exports = {
                     { name: 'Membres', value: guild.memberCount.toString(), inline: true },
                     { name: 'Salons', value: guild.channels.cache.size.toString(), inline: true },
                     { name: 'Rôles', value: guild.roles.cache.size.toString(), inline: true },
-                    { name: 'Niveau de vérification', value: guild.verificationLevel.toString(), inline: true },
+                    { name: 'Niveau de vérification', value: verificationLevels[guild.verificationLevel], inline: true },
                     { name: 'Région', value: guild.preferredLocale, inline: true }
                 )
                 .setFooter({

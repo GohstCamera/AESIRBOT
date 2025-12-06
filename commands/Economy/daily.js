@@ -52,11 +52,11 @@ module.exports = {
             
             // --- LOGIQUE DU COOLDOWN ---
             
-            const lastDailyTime = moment(user.last_daily);
+            const lastDailyTime = user.last_daily ? moment(user.last_daily) : null;
             const now = moment();
             
             // Calcul du temps écoulé depuis la dernière récompense en millisecondes
-            const timeSinceLastDailyMs = now.diff(lastDailyTime);
+            const timeSinceLastDailyMs = lastDailyTime ? now.diff(lastDailyTime) : dailyCooldownMs;
             
             // 2. Vérifier si le délai est écoulé
             if (timeSinceLastDailyMs >= dailyCooldownMs) {

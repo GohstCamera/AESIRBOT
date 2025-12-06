@@ -117,12 +117,13 @@ async function handleShopSelection(interaction) {
 module.exports = {
     // Le gestionnaire principal pour les interactions spécifiques à ce module
     async handleInteraction(interaction) {
+        if (!interaction.isStringSelectMenu()) {
+            return false;
+        }
         // Le log indiquait que le routeur cherchait la clé 'boutique'. 
         // Ici, on gère les Custom IDs qui commencent par 'jobs_boutique_'
-        if (interaction.isStringSelectMenu()) {
-            if (interaction.customId.startsWith('jobs_boutique_')) { 
-                return handleShopSelection(interaction);
-            }
+        if (interaction.customId.startsWith('jobs_boutique_')) { 
+            return handleShopSelection(interaction);
         }
         // Pour les autres interactions (boutons, autres menus) non gérées ici
         return false; 

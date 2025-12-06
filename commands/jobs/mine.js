@@ -53,8 +53,8 @@ module.exports = {
         const now = Date.now();
         // Cooldown d'une heure (3 600 000 ms)
         const COOLDOWN_DURATION = 3600000; 
-        if (user.mineCooldown && now < user.mineCooldown.getTime()) {
-            const timeLeft = Math.ceil((user.mineCooldown.getTime() - now) / 60000);
+        if (user.mineCooldown && now < new Date(user.mineCooldown).getTime()) {
+            const timeLeft = Math.ceil((new Date(user.mineCooldown).getTime() - now) / 60000);
             return interaction.editReply({ content: `⏳ Tu dois attendre encore **${timeLeft} minutes** pour miner à nouveau.` });
         }
         

@@ -98,6 +98,7 @@ async function handleCreateCrewModalSubmit(interaction) {
     const crewDescription = interaction.fields.getTextInputValue('crewDescriptionInput');
     const CREW_COST = 1500;
 
+    // TODO: Implement the rest of the creation logic
     // ... (le reste de la logique de création reste identique)
     // Tente de trouver l'utilisateur existant
     let existingUser = await prisma.user.findUnique({
@@ -108,7 +109,7 @@ async function handleCreateCrewModalSubmit(interaction) {
     // Si l'utilisateur n'existe pas, il est créé ici
     if (!existingUser) {
         existingUser = await prisma.user.create({
-            data: { id: interaction.user.id, balance: 0, username: interaction.user.username },
+            data: { id: interaction.user.id, username: interaction.user.username, balance: 0, crewId: null },
             select: { balance: true, crewId: true }
         });
     }
@@ -126,6 +127,7 @@ async function handleCreateCrewModalSubmit(interaction) {
         return interaction.editReply({ content: `❌ Tu n'as pas assez d'argent. Il te manque **${(CREW_COST - existingUser.balance).toLocaleString()}€**.` });
     }
 
+    // TODO: Implement the transaction logic
     // ... (le reste de la logique de transaction est correcte)
     // ...
     // à la fin :
@@ -146,6 +148,7 @@ async function handleShowNotifications(interaction) {
     if (userCheck && userCheck.crewId) {
         return interaction.followUp({ content: '⚠️ Tu es déjà membre d\'un clan. Tu ne peux pas accepter de nouvelles invitations.', ephemeral: true });
     }
+    // TODO: Implement the rest of the notification logic
     // ... (le reste de la logique d'affichage des invitations est correcte)
     // ...
     // à la fin :
@@ -160,6 +163,7 @@ async function handleBookNavigation(interaction) {
     const parts = interaction.customId.split('_');
     const action = parts[1];
     const currentOldIndex = parseInt(parts[2]);
+    // TODO: Implement the rest of the navigation logic
     // ... (le reste de la logique de navigation est correcte)
     // ...
     // à la fin :
@@ -186,6 +190,7 @@ async function handleInviteResponse(interaction) {
 
     // Logique d'acceptation
     if (action === 'accept') {
+        // TODO: Implement the rest of the acceptance logic
         // ... (le reste de la logique d'acceptation est correcte)
         // ...
         // à la fin :

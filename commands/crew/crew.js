@@ -88,7 +88,10 @@ module.exports = {
                     memberList.push(`- **${memberTag}** (${memberRoleDisplay})`);
                 });
                 
-                const memberListString = memberList.join('\n');
+                let memberListString = memberList.join('\n');
+                if (memberListString.length > 1024) {
+                    memberListString = memberListString.substring(0, 1020) + '\n...';
+                }
                 // -------------------------------------------
 
                 const embed = new EmbedBuilder()
@@ -108,7 +111,7 @@ module.exports = {
                         { name: `Ressources du Clan`, 
                           value: `🪵 Bois: ${crew.bois?.toLocaleString() || 0} | 🧱 Pierre: ${crew.pierre?.toLocaleString() || 0} | 🍖 Nourriture: ${crew.nourriture?.toLocaleString() || 0}`, 
                           inline: false },
-                        { name: `Liste des Membres`, value: memberListString.substring(0, 1024), inline: false },
+                        { name: `Liste des Membres`, value: memberListString, inline: false },
                     )
                     .setColor('DarkGreen')
                     .setTimestamp();

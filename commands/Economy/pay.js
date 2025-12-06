@@ -35,7 +35,7 @@ module.exports = {
             const senderUser = await prisma.user.upsert({
                 where: { id: sender.id },
                 update: {},
-                create: { id: sender.id, balance: 0, last_daily: new Date(0) },
+                create: { id: sender.id, balance: 0, last_daily: null },
                 select: { balance: true }
             });
 
@@ -49,7 +49,7 @@ module.exports = {
                 await tx.user.upsert({
                     where: { id: recipient.id },
                     update: {},
-                    create: { id: recipient.id, balance: 0, last_daily: new Date(0) },
+                    create: { id: recipient.id, balance: 0, last_daily: null },
                 });
 
                 // Débiter l'expéditeur

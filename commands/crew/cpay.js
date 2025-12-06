@@ -270,7 +270,7 @@ module.exports = {
             .setDescription(embedDescription)
             .setColor(success ? 'Green' : 'Red')
             .setFooter({ 
-                text: `Dons restants aujourd'hui: ${donationLimit - (success ? newDonationCount : currentDonationCount)} | Solde: ${newBalance.toLocaleString()}€ | Diamants: ${newDiamants.toLocaleString()} 💎 | Notoriété: ${newNotoriety.toLocaleString()} ✨` 
+                text: `Dons restants aujourd'hui: ${donationLimit > 0 ? donationLimit - (success ? newDonationCount : currentDonationCount) : 'N/A'} | Solde: ${newBalance.toLocaleString()}€ | Diamants: ${newDiamants.toLocaleString()} 💎 | Notoriété: ${newNotoriety.toLocaleString()} ✨` 
             })
             .setTimestamp();
         

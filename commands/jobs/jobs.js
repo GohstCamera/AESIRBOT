@@ -42,17 +42,22 @@ module.exports = {
             return interaction.editReply({ content: '❌ Ce job n\'existe pas.' });
         }
 
-        const userJobs = user.jobs.split(',').filter(j => j.length > 0);
+        const userJobs = user.jobs ? user.jobs.split(',').filter(j => j.length > 0) : [];
         if (userJobs.includes(jobId)) {
             return interaction.editReply({ content: `❌ Tu possèdes déjà le job de ${jobToBuy.name}.` });
         }
 
         const crew = user.crew;
-        if (crew.bois < jobToBuy.cost.bois || crew.pierre < jobToBuy.cost.pierre || crew.nourriture < jobToBuy.cost.nourriture) {
+        const cost = jobToBuy.cost || {};
+        const woodCost = cost.bois || 0;
+        const stoneCost = cost.pierre || 0;
+        const foodCost = cost.nourriture || 0;
+
+        if (crew.bois < woodCost || crew.pierre < stoneCost || crew.nourriture < foodCost) {
             const missingResources = [];
-            if (crew.bois < jobToBuy.cost.bois) missingResources.push(`${jobToBuy.cost.bois - crew.bois} bois`);
-            if (crew.pierre < jobToBuy.cost.pierre) missingResources.push(`${jobToBuy.cost.pierre - crew.pierre} pierre`);
-            if (crew.nourriture < jobToBuy.cost.nourriture) missingResources.push(`${jobToBuy.cost.nourriture - crew.nourriture} nourriture`);
+            if (crew.bois < woodCost) missingResources.push(`${woodCost - crew.bois} bois`);
+            if (crew.pierre < stoneCost) missingResources.push(`${stoneCost - crew.pierre} pierre`);
+            if (crew.nourriture < foodCost) missingResources.push(`${foodCost - crew.nourriture} nourriture`);
 
             return interaction.editReply({
                 content: `❌ Ton clan n'a pas assez de ressources pour acheter le job de ${jobToBuy.name}. Il vous manque : ${missingResources.join(', ')}.`,
@@ -69,19 +74,21 @@ module.exports = {
             prisma.crew.update({
                 where: { id: crew.id },
                 data: {
-                    bois: { decrement: jobToBuy.cost.bois },
-                    pierre: { decrement: jobToBuy.cost.pierre },
-                    nourriture: { decrement: jobToBuy.cost.nourriture },
+                    bois: { decrement: woodCost },
+                    pierre: { decrement: stoneCost },
+                    nourriture: { decrement: foodCost },
                 },
             }),
         ]);
+
+        const costString = Object.entries(cost).map(([key, value]) => `${key.charAt(0).toUpperCase() + key.slice(1)}: ${value}`).join('\n');
 
         const embed = new EmbedBuilder()
             .setTitle(`✅ Job acheté !`)
             .setDescription(`Tu es maintenant un **${jobToBuy.name}** !`)
             .setColor('#2ecc71')
             .addFields(
-                { name: 'Coût', value: `Bois: ${jobToBuy.cost.bois}\nPierre: ${jobToBuy.cost.pierre}\nNourriture: ${jobToBuy.cost.nourriture}` },
+                { name: 'Coût', value: costString }
             )
             .setTimestamp();
 
