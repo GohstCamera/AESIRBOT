@@ -1,0 +1,58 @@
+[
+    {  
+        "name": "Soldat de Base",
+        "stars": 1,
+        "color": "#aaaaaa",
+        "powerValue": 8,
+        "emoji": "⭐",
+        "description": "Un membre standard.",
+        "skills": "Tir Rapide",
+        "chance": 0.50,
+        "image_file": "1.soldat_de_base.png" 
+    },
+    {  
+        "name": "MEDECIN COMBATTANT",
+        "stars": 2,
+        "color": "#44bb44",
+        "powerValue": 180,
+        "emoji": "⭐⭐",
+        "description": "MEDECIN COMBATTANT",
+        "skills": "Support Vital Classé",
+        "chance": 0.30,
+        "image_file": "2.medecincombattant.png"
+    },
+    {  
+        "name": "Pirate Informatique",
+        "stars": 4,
+        "color": "#bb44bb",
+        "powerValue": 260,
+        "emoji": "⭐⭐",
+        "description": "Agent Secret",
+        "skills": "Infiltraction Digitale Profonde",
+        "chance": 0.30,
+        "image_file": "4.Pirate_Informatique.png"
+    },
+    {  
+        "name": "Sentinelle Cybernétique",
+        "stars": 5,
+        "color": "#ffcc00",
+        "powerValue": 5,
+        "emoji": "⭐⭐",
+        "description": "Robots avancés.",
+        "skills": "Protocoles de Défense Avancés",
+        "chance": 0.30,
+        "image_file": "5.Sentinelle_Cybernétique.png"
+    },
+    {
+      
+        "name": "ARTILLEUR LOURD",
+        "stars": 4,
+        "color": "#4444bb",
+        "powerValue": 330,
+        "emoji": "⭐⭐⭐⭐",
+        "description": "Spécialiste en armement.",
+        "skills": "Soutient aux troupes",
+        "chance": 0.10,
+        "image_file": "3.Artilleur_Lourd.png"
+    }
+]

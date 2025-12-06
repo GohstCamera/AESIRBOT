@@ -1,0 +1,17 @@
+{
+  "743155509691023431": [],
+  "1420789426262507560": [
+    {
+      "type": "lock",
+      "reason": "Salon verrouillé par modération",
+      "modId": "743155509691023431",
+      "date": "2025-09-27T21:39:57.509Z"
+    },
+    {
+      "type": "unlock",
+      "reason": "Salon déverrouillé par modération",
+      "modId": "743155509691023431",
+      "date": "2025-09-27T21:40:06.251Z"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+pour regarder si ya des mise a jour dans t'es dependance directement
+
+nxp ncu
+
+si yen a mettre a jour auto ton package.json avec 
+
+npx ncu -u
+
+installer les mis a jours qui on etais mis a la bonne version dans ton package 
+
+npm install 
+
+plus simple pour mettre a jour auto sans chercher

@@ -1,0 +1,44 @@
+{
+    "default": {
+        "name": "Standard",
+        "options": [
+            {
+                "name": "Participe",
+                "emoji": "✅"
+            },
+            {
+                "name": "Participe peut-être",
+                "emoji": "❔"
+            },
+            {
+                "name": "Ne participe pas",
+                "emoji": "❌"
+            }
+        ]
+    },
+    "lol": {
+        "name": "League of Legends",
+        "options": [
+            {
+                "name": "Top",
+                "emoji": "🗡️"
+            },
+            {
+                "name": "Jungle",
+                "emoji": "🌲"
+            },
+            {
+                "name": "Mid",
+                "emoji": "🔮"
+            },
+            {
+                "name": "Bot",
+                "emoji": "🏹"
+            },
+            {
+                "name": "Support",
+                "emoji": "🛡️"
+            }
+        ]
+    }
+}
