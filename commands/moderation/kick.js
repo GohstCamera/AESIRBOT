@@ -22,50 +22,34 @@ module.exports = {
         .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
 
     async execute(interaction) {
-        // IDs des salons de logs
         const LOG_MODO = '1382779351891705866';
         
-        // Vérification des permissions
-        if (!hasPermission(interaction, ['ModerateMembers'])) {
+        if (!hasPermission(interaction, ['KickMembers'])) {
             return interaction.reply({
                 content: '❌ Tu n’as pas la permission d’utiliser cette commande.',
                 ephemeral: true
             });
         }
 
-        try {
-            await interaction.deferReply(); // Réponse immédiate pour éviter le timeout
+        await interaction.deferReply({ ephemeral: true });
 
+        try {
             const memberToKick = interaction.options.getMember('member');
             const reason = interaction.options.getString('reason') || 'Aucune raison fournie';
 
-            // Gérer les cas d'erreur avant toute action
             if (!memberToKick) {
-                return interaction.editReply({
-                    content: '❌ Ce membre n\'est pas sur le serveur.',
-                    ephemeral: true
-                });
+                return interaction.editReply({ content: '❌ Ce membre n\'est pas sur le serveur.' });
             }
             if (memberToKick.id === interaction.user.id) {
-                return interaction.editReply({
-                    content: '❌ Vous ne pouvez pas vous expulser vous-même.',
-                    ephemeral: true
-                });
+                return interaction.editReply({ content: '❌ Vous ne pouvez pas vous expulser vous-même.' });
             }
             if (memberToKick.id === interaction.client.user.id) {
-                return interaction.editReply({
-                    content: '❌ Je ne peux pas m\'expulser moi-même.',
-                    ephemeral: true
-                });
+                return interaction.editReply({ content: '❌ Je ne peux pas m\'expulser moi-même.' });
             }
             if (!memberToKick.kickable) {
-                return interaction.editReply({
-                    content: '❌ Je ne peux pas expulser ce membre. Il a probablement un rôle plus élevé ou égal au mien.',
-                    ephemeral: true
-                });
+                return interaction.editReply({ content: '❌ Je ne peux pas expulser ce membre. Il a probablement un rôle plus élevé ou égal au mien.' });
             }
             
-            // Envoi d'un MP avant l'expulsion
             try {
                 const embedDM = new EmbedBuilder()
                     .setTitle('👢 Expulsion')
@@ -73,15 +57,15 @@ module.exports = {
                         `Vous avez été **expulsé** du serveur **${interaction.guild.name}**.\n` +
                         `**Raison :** ${reason}`
                     )
-                    .setColor('#ff7f50'); // Orange corail
+                    .setColor('#ff7f50');
 
                 await memberToKick.send({ embeds: [embedDM] });
             } catch (error) {
                 console.log(`❌ Impossible d'envoyer un message privé à ${memberToKick.user.tag}: ${error.message}`);
             }
             
-            // Expulsion du membre et ajout au casier
             await memberToKick.kick(`${reason} (Expulsé par ${interaction.user.tag})`);
+
             await addToCasier({
                 guildId: interaction.guild.id,
                 userId: memberToKick.id,
@@ -90,22 +74,17 @@ module.exports = {
                 modId: interaction.user.id
             });
 
-            // Création de l'embed de réponse pour l'interaction
             const interactionEmbed = new EmbedBuilder()
                 .setTitle('👢 Expulsion')
-                .setDescription(
-                    `L'utilisateur ${memberToKick} a été expulsé du serveur.\n` +
-                    `**Raison :** ${reason}`
-                )
+                .setDescription(`L'utilisateur ${memberToKick} a été expulsé du serveur.\n**Raison :** ${reason}`)
                 .setColor('#ff7f50');
 
-            await interaction.editReply({ embeds: [interactionEmbed] });
+            await interaction.editReply({ embeds: [interactionEmbed], ephemeral: false });
 
-            // Création de l'embed de log pour le salon de modération
             const logChannel = interaction.guild.channels.cache.get(LOG_MODO);
             if (logChannel && logChannel.type === ChannelType.GuildText) {
                 const logEmbed = new EmbedBuilder()
-                    .setColor('#FFA500') // Orange
+                    .setColor('#FFA500')
                     .setTitle('👢 Expulsion d\'un membre')
                     .setDescription(`
                         **Membre expulsé :** ${memberToKick.user.tag} (${memberToKick.id})
@@ -113,20 +92,18 @@ module.exports = {
                         **Raison :** ${reason}
                     `)
                     .setTimestamp()
-                    .setFooter({
-                        text: `ID : ${memberToKick.id}`,
-                        iconURL: interaction.user.displayAvatarURL()
-                    });
+                    .setFooter({ text: `ID : ${memberToKick.id}` });
 
                 await logChannel.send({ embeds: [logEmbed] });
             }
 
         } catch (error) {
             console.error('Erreur lors de l\'exécution de la commande /kick :', error);
-            await interaction.editReply({
-                content: `❌ Une erreur est survenue lors de l'expulsion. Veuillez vérifier les permissions ou réessayer plus tard.`,
-                ephemeral: true
-            });
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply({ content: `❌ Une erreur est survenue lors de l'expulsion.`, ephemeral: true });
+            } else {
+                await interaction.reply({ content: `❌ Une erreur est survenue lors de l'expulsion.`, ephemeral: true });
+            }
         }
     }
 };

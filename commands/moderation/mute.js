@@ -30,10 +30,8 @@ module.exports = {
         .setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers),
 
     async execute(interaction) {
-        // IDs des salons de logs
         const LOG_MODO = '1382779351891705866';
 
-        // Vérification des permissions
         if (!hasPermission(interaction, ['ModerateMembers'])) {
             return interaction.reply({
                 content: '❌ Tu n\'as pas la permission d\'utiliser cette commande.',
@@ -41,46 +39,32 @@ module.exports = {
             });
         }
 
-        try {
-            await interaction.deferReply(); // Réponse immédiate pour éviter le timeout
+        await interaction.deferReply({ ephemeral: true });
 
+        try {
             const memberToMute = interaction.options.getMember('member');
             const reason = interaction.options.getString('reason') || 'Aucune raison fournie';
             const duration = interaction.options.getInteger('duration');
 
-            // Vérifications en amont
             if (!memberToMute) {
-                return interaction.editReply({
-                    content: '❌ Ce membre n\'est pas sur le serveur.',
-                    ephemeral: true
-                });
+                return interaction.editReply({ content: '❌ Ce membre n\'est pas sur le serveur.' });
             }
 
             if (memberToMute.id === interaction.user.id) {
-                return interaction.editReply({
-                    content: '❌ Vous ne pouvez pas vous mute vous-même.',
-                    ephemeral: true
-                });
+                return interaction.editReply({ content: '❌ Vous ne pouvez pas vous mute vous-même.' });
             }
 
             if (memberToMute.isCommunicationDisabled()) {
-                return interaction.editReply({
-                    content: '❌ Ce membre est déjà mute.',
-                    ephemeral: true
-                });
+                return interaction.editReply({ content: '❌ Ce membre est déjà mute.' });
             }
 
             if (!memberToMute.moderatable) {
-                return interaction.editReply({
-                    content: '❌ Je ne peux pas mute ce membre. Il a probablement des permissions plus élevées que moi.',
-                    ephemeral: true
-                });
+                return interaction.editReply({ content: '❌ Je ne peux pas mute ce membre. Il a probablement des permissions plus élevées que moi.' });
             }
 
-            const durationInMs = duration ? duration * 60 * 1000 : null; // null pour permanent
+            const durationInMs = duration ? duration * 60 * 1000 : null;
             const durationText = duration ? `${duration} minutes` : 'Permanent';
 
-            // Envoi d'un MP avant le mute
             try {
                 const embedDM = new EmbedBuilder()
                     .setTitle('🔇 Mute')
@@ -96,10 +80,8 @@ module.exports = {
                 console.log(`❌ Impossible d'envoyer un message privé à ${memberToMute.user.tag}.`);
             }
 
-            // Appliquer le mute
             await memberToMute.timeout(durationInMs, reason);
 
-            // Ajouter au casier
             await addToCasier({
                 guildId: interaction.guild.id,
                 userId: memberToMute.id,
@@ -108,7 +90,6 @@ module.exports = {
                 modId: interaction.user.id
             });
             
-            // Création de l'embed de réponse pour l'interaction
             const interactionEmbed = new EmbedBuilder()
                 .setTitle('🔇 Mute')
                 .setDescription(
@@ -118,9 +99,8 @@ module.exports = {
                 )
                 .setColor('#ff0000');
 
-            await interaction.editReply({ embeds: [interactionEmbed] });
+            await interaction.editReply({ embeds: [interactionEmbed], ephemeral: false });
 
-            // Création de l'embed de log pour le salon de modération
             const logChannel = interaction.guild.channels.cache.get(LOG_MODO);
             if (logChannel && logChannel.type === ChannelType.GuildText) {
                 const logEmbed = new EmbedBuilder()
@@ -133,20 +113,18 @@ module.exports = {
                         **Durée :** ${durationText}
                     `)
                     .setTimestamp()
-                    .setFooter({
-                        text: `ID : ${memberToMute.id}`,
-                        iconURL: interaction.user.displayAvatarURL()
-                    });
+                    .setFooter({ text: `ID : ${memberToMute.id}` });
 
                 await logChannel.send({ embeds: [logEmbed] });
             }
 
         } catch (error) {
             console.error('Erreur lors de l\'exécution de la commande /mute :', error);
-            await interaction.editReply({
-                content: `❌ Une erreur est survenue lors du mute : ${error.message}`,
-                ephemeral: true
-            });
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply({ content: `❌ Une erreur est survenue lors du mute.`, ephemeral: true });
+            } else {
+                await interaction.reply({ content: `❌ Une erreur est survenue lors du mute.`, ephemeral: true });
+            }
         }
     }
 };

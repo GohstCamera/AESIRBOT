@@ -1,84 +1,61 @@
-const fs = require('fs').promises;
-const path = require('path');
+const db = require('./database');
 
-const CASIERS_DIR = path.join(__dirname, '../casiers');
-
-// Assurez-vous que le dossier casiers existe
-async function ensureCasiersDir() {
-    try {
-        await fs.access(CASIERS_DIR);
-    } catch {
-        await fs.mkdir(CASIERS_DIR, { recursive: true });
-    }
-}
-
-// Obtenir le chemin du fichier casier pour un serveur
-function getCasierPath(guildId) {
-    return path.join(CASIERS_DIR, `${guildId}.json`);
-}
-
-// ✅ Ajouter une infraction au casier (version objet)
+/**
+ * Ajoute une infraction (transaction) dans la base de données.
+ * @param {object} infraction - L'objet contenant les détails de l'infraction.
+ * @param {string} infraction.guildId - L'ID du serveur.
+ * @param {string} infraction.userId - L'ID de l'utilisateur sanctionné.
+ * @param {string} infraction.type - Le type d'infraction (warn, mute, kick, ban).
+ * @param {string} infraction.reason - La raison de l'infraction.
+ * @param {string} infraction.modId - L'ID du modérateur.
+ */
 async function addToCasier({ guildId, userId, type, reason, modId }) {
-    await ensureCasiersDir();
-    const casierPath = getCasierPath(guildId);
-
-    let casiers;
-    try {
-        const data = await fs.readFile(casierPath, 'utf8');
-        casiers = JSON.parse(data);
-    } catch {
-        casiers = {};
-    }
-
-    if (!casiers[userId]) {
-        casiers[userId] = [];
-    }
-
-    const infraction = {
-        type,
-        reason,
-        modId,
-        date: new Date().toISOString()
-    };
-
-    casiers[userId].push(infraction);
-    await fs.writeFile(casierPath, JSON.stringify(casiers, null, 2));
-    return infraction;
+    const query = `
+        INSERT INTO Transaction (senderId, recipientId, amount, type, crewId, reason, modId)
+        VALUES (?, ?, 0, ?, ?, ?, ?)
+    `;
+    await db.execute(query, [modId, userId, type.toUpperCase(), guildId, reason, modId]);
 }
 
-// ✅ Récupérer le casier d'un utilisateur
+/**
+ * Récupère le casier judiciaire (toutes les infractions) d'un utilisateur.
+ * @param {string} guildId - L'ID du serveur.
+ * @param {string} userId - L'ID de l'utilisateur.
+ * @returns {Promise<Array>} - Un tableau d'objets d'infraction.
+ */
 async function getCasier(guildId, userId) {
-    await ensureCasiersDir();
-    const casierPath = getCasierPath(guildId);
-
-    try {
-        const data = await fs.readFile(casierPath, 'utf8');
-        const casiers = JSON.parse(data);
-        return casiers[userId] || [];
-    } catch {
-        return [];
-    }
+    const query = `
+        SELECT id, type, reason, modId, createdAt as date
+        FROM Transaction
+        WHERE recipientId = ? AND crewId = ? AND type IN ('WARN', 'MUTE', 'KICK', 'BAN', 'UNBAN', 'UNMUTE', 'NOTE')
+        ORDER BY createdAt ASC
+    `;
+    const [rows] = await db.execute(query, [userId, guildId]);
+    return rows;
 }
 
-// ✅ Réécrire le casier d’un utilisateur
-async function saveCasier(guildId, userId, infractions) {
-    await ensureCasiersDir();
-    const casierPath = getCasierPath(guildId);
-
-    let casiers;
-    try {
-        const data = await fs.readFile(casierPath, 'utf8');
-        casiers = JSON.parse(data);
-    } catch {
-        casiers = {};
-    }
-
-    casiers[userId] = infractions;
-    await fs.writeFile(casierPath, JSON.stringify(casiers, null, 2));
+/**
+ * Supprime un avertissement spécifique du casier d'un utilisateur.
+ * @param {number} infractionId - L'ID de l'infraction (transaction) à supprimer.
+ */
+async function removeWarn(infractionId) {
+    const query = 'DELETE FROM Transaction WHERE id = ? AND type = \'WARN\'';
+    await db.execute(query, [infractionId]);
 }
-  
+
+/**
+ * Met à jour la raison d'un avertissement spécifique.
+ * @param {number} infractionId - L'ID de l'infraction (transaction) à modifier.
+ * @param {string} newReason - La nouvelle raison.
+ */
+async function updateWarn(infractionId, newReason) {
+    const query = 'UPDATE Transaction SET reason = ? WHERE id = ? AND type = \'WARN\'';
+    await db.execute(query, [newReason, infractionId]);
+}
+
 module.exports = {
     addToCasier,
     getCasier,
-    saveCasier
+    removeWarn,
+    updateWarn
 };

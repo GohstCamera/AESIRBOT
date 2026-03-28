@@ -21,10 +21,8 @@ module.exports = {
                 .setRequired(false)),
 
     async execute(interaction) {
-        // IDs des salons de logs
         const LOG_MODO = '1382779351891705866';
 
-        // Vérification des permissions
         if (!hasPermission(interaction, ['ModerateMembers'])) {
             return interaction.reply({
                 content: '❌ Tu n’as pas la permission d’utiliser cette commande.',
@@ -32,27 +30,19 @@ module.exports = {
             });
         }
 
-        try {
-            await interaction.deferReply(); // Réponse immédiate
+        await interaction.deferReply({ ephemeral: true });
 
+        try {
             const memberToWarn = interaction.options.getMember('member');
             const reason = interaction.options.getString('reason') || 'Aucune raison fournie';
 
-            // Vérifications en amont
             if (!memberToWarn) {
-                return interaction.editReply({
-                    content: '❌ Ce membre n\'est pas sur le serveur.',
-                    ephemeral: true
-                });
+                return interaction.editReply({ content: '❌ Ce membre n\'est pas sur le serveur.' });
             }
             if (memberToWarn.id === interaction.user.id) {
-                return interaction.editReply({
-                    content: '❌ Vous ne pouvez pas vous avertir vous-même.',
-                    ephemeral: true
-                });
+                return interaction.editReply({ content: '❌ Vous ne pouvez pas vous avertir vous-même.' });
             }
 
-            // Envoie un MP au membre averti
             try {
                 const embedDM = new EmbedBuilder()
                     .setTitle('⚠️ Avertissement')
@@ -66,7 +56,6 @@ module.exports = {
                 console.log(`❌ Impossible d'envoyer un message privé à ${memberToWarn.user.tag}.`);
             }
 
-            // Ajout au casier
             await addToCasier({
                 guildId: interaction.guild.id,
                 userId: memberToWarn.id,
@@ -75,9 +64,8 @@ module.exports = {
                 modId: interaction.user.id
             });
 
-            // Vérification du nombre d'avertissements pour l'embed de réponse
             const infractions = await getCasier(interaction.guild.id, memberToWarn.id);
-            const warnCount = infractions.filter(inf => inf.type === 'warn').length;
+            const warnCount = infractions.filter(inf => inf.type.toUpperCase() === 'WARN').length;
 
             const interactionEmbed = new EmbedBuilder()
                 .setTitle('⚠️ Avertissement')
@@ -88,13 +76,12 @@ module.exports = {
                 )
                 .setColor(warnCount >= 3 ? '#ff0000' : warnCount === 2 ? '#ffa500' : '#ffd700');
 
-            await interaction.editReply({ embeds: [interactionEmbed] });
+            await interaction.editReply({ embeds: [interactionEmbed], ephemeral: false });
             
-            // Création de l'embed de log pour le salon de modération
             const logChannel = interaction.guild.channels.cache.get(LOG_MODO);
             if (logChannel && logChannel.type === ChannelType.GuildText) {
                 const logEmbed = new EmbedBuilder()
-                    .setColor('#FFD700') // Jaune
+                    .setColor('#FFD700')
                     .setTitle('⚠️ Avertissement d\'un membre')
                     .setDescription(`
                         **Membre averti :** ${memberToWarn.user.tag} (${memberToWarn.id})
@@ -103,15 +90,11 @@ module.exports = {
                         **Total d'avertissements :** ${warnCount}
                     `)
                     .setTimestamp()
-                    .setFooter({
-                        text: `ID : ${memberToWarn.id}`,
-                        iconURL: interaction.user.displayAvatarURL()
-                    });
+                    .setFooter({ text: `ID : ${memberToWarn.id}` });
 
                 await logChannel.send({ embeds: [logEmbed] });
             }
 
-            // Message supplémentaire si 3+ avertissements
             if (warnCount >= 3) {
                 try {
                     const embedDM = new EmbedBuilder()
@@ -129,10 +112,11 @@ module.exports = {
 
         } catch (error) {
             console.error('Erreur lors de l\'exécution de la commande /warn :', error);
-            await interaction.editReply({
-                content: `❌ Une erreur est survenue lors de l'avertissement : ${error.message}`,
-                ephemeral: true
-            });
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply({ content: `❌ Une erreur est survenue lors de l'avertissement.`, ephemeral: true });
+            } else {
+                await interaction.reply({ content: `❌ Une erreur est survenue lors de l'avertissement.`, ephemeral: true });
+            }
         }
     }
 };

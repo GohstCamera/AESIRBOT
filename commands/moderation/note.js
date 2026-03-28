@@ -22,10 +22,8 @@ module.exports = {
         .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
 
     async execute(interaction) {
-        // IDs des salons de logs
         const LOG_MODO = '1382779351891705866';
 
-        // Vérification des permissions
         if (!hasPermission(interaction, ['ModerateMembers'])) {
             return interaction.reply({
                 content: '❌ Tu n’as pas la permission d’ajouter des notes.',
@@ -33,20 +31,16 @@ module.exports = {
             });
         }
 
-        try {
-            await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ ephemeral: true });
 
+        try {
             const member = interaction.options.getMember('member');
             const note = interaction.options.getString('note');
 
             if (!member) {
-                return interaction.editReply({
-                    content: '❌ Ce membre n\'est pas sur le serveur.',
-                    ephemeral: true
-                });
+                return interaction.editReply({ content: '❌ Ce membre n\'est pas sur le serveur.' });
             }
 
-            // Ajouter au casier
             await addToCasier({
                 guildId: interaction.guild.id,
                 userId: member.id,
@@ -55,22 +49,17 @@ module.exports = {
                 modId: interaction.user.id
             });
 
-            // Création de l'embed de réponse pour l'interaction
             const interactionEmbed = new EmbedBuilder()
                 .setTitle('📝 Note ajoutée')
-                .setDescription(
-                    `Une note a été ajoutée pour l'utilisateur ${member}.\n` +
-                    `**Note :** ${note}`
-                )
+                .setDescription(`Une note a été ajoutée pour l'utilisateur ${member}.\n**Note :** ${note}`)
                 .setColor('#4287f5');
 
             await interaction.editReply({ embeds: [interactionEmbed] });
 
-            // Création de l'embed de log pour le salon de modération
             const logChannel = interaction.guild.channels.cache.get(LOG_MODO);
             if (logChannel && logChannel.type === ChannelType.GuildText) {
                 const logEmbed = new EmbedBuilder()
-                    .setColor('#87CEEB') // Bleu clair pour les notes
+                    .setColor('#87CEEB')
                     .setTitle('📝 Ajout d\'une note')
                     .setDescription(`
                         **Membre concerné :** ${member.user.tag} (${member.id})
@@ -78,10 +67,7 @@ module.exports = {
                         **Note :** ${note}
                     `)
                     .setTimestamp()
-                    .setFooter({
-                        text: `ID : ${member.id}`,
-                        iconURL: interaction.user.displayAvatarURL()
-                    });
+                    .setFooter({ text: `ID : ${member.id}` });
 
                 await logChannel.send({ embeds: [logEmbed] });
             }
@@ -89,7 +75,7 @@ module.exports = {
         } catch (error) {
             console.error('Erreur lors de l\'exécution de la commande /note :', error);
             await interaction.editReply({
-                content: `❌ Une erreur est survenue lors de l'ajout de la note : ${error.message}`,
+                content: `❌ Une erreur est survenue lors de l'ajout de la note.`,
                 ephemeral: true
             });
         }

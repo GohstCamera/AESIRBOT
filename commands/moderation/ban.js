@@ -24,10 +24,8 @@ module.exports = {
         .setDefaultMemberPermissions(PermissionsBitField.Flags.BanMembers),
 
     async execute(interaction) {
-        // Log channel ID pour tous les logs d'événements
         const logChannelId = '1382779351891705866';
 
-        // Validation des permissions
         if (!hasPermission(interaction, ['BanMembers'])) {
             return interaction.reply({
                 content: '❌ Tu n\'as pas la permission d\'utiliser cette commande.',
@@ -35,33 +33,25 @@ module.exports = {
             });
         }
 
+        // deferReply est important pour les actions qui peuvent prendre du temps
+        await interaction.deferReply({ ephemeral: true });
+
         try {
             const memberToBan = interaction.options.getMember('member');
             const reason = interaction.options.getString('reason') || 'Aucune raison fournie';
 
-            // Gérer les cas d'erreur avant toute action
             if (!memberToBan) {
-                return interaction.reply({
-                    content: '❌ Ce membre n\'est pas sur le serveur.',
-                    ephemeral: true
-                });
+                return interaction.editReply({ content: '❌ Ce membre n\'est pas sur le serveur.' });
             }
 
             if (memberToBan.id === interaction.user.id) {
-                return interaction.reply({
-                    content: '❌ Vous ne pouvez pas vous bannir vous-même.',
-                    ephemeral: true
-                });
+                return interaction.editReply({ content: '❌ Vous ne pouvez pas vous bannir vous-même.' });
             }
 
             if (!memberToBan.bannable) {
-                return interaction.reply({
-                    content: '❌ Je ne peux pas bannir ce membre. Il a probablement des permissions plus élevées que moi.',
-                    ephemeral: true
-                });
+                return interaction.editReply({ content: '❌ Je ne peux pas bannir ce membre. Il a probablement des permissions plus élevées que moi.' });
             }
 
-            // Envoi du MP avant le ban
             try {
                 const embedDM = new EmbedBuilder()
                     .setTitle('🔨 Bannissement')
@@ -77,7 +67,10 @@ module.exports = {
                 console.log(`❌ Impossible d'envoyer un message privé à ${memberToBan.user.tag}.`);
             }
 
-            // Ban le membre et ajoute au casier
+            // Ban le membre
+            await memberToBan.ban({ reason: `${reason} (Banni par ${interaction.user.tag})` });
+
+            // Ajoute au casier via la nouvelle fonction SQL
             await addToCasier({
                 guildId: interaction.guild.id,
                 userId: memberToBan.id,
@@ -86,22 +79,14 @@ module.exports = {
                 modId: interaction.user.id
             });
 
-            await memberToBan.ban({
-                reason: `${reason} (Banni par ${interaction.user.tag})`
-            });
-
-            // Réponse à l'interaction
             const embed = new EmbedBuilder()
                 .setTitle('🔨 Bannissement')
-                .setDescription(
-                    `L'utilisateur ${memberToBan} a été banni.\n` +
-                    `**Raison :** ${reason}`
-                )
+                .setDescription(`L'utilisateur ${memberToBan} a été banni.\n**Raison :** ${reason}`)
                 .setColor('#ff0000');
 
-            await interaction.reply({ embeds: [embed] });
+            // Répondre publiquement (ou en éphémère si vous préférez)
+            await interaction.editReply({ embeds: [embed], ephemeral: false });
 
-            // Log de l'action
             const logChannel = interaction.guild.channels.cache.get(logChannelId);
             if (logChannel && logChannel.type === ChannelType.GuildText) {
                 const logEmbed = new EmbedBuilder()
@@ -113,20 +98,18 @@ module.exports = {
                         **Raison :** ${reason}
                     `)
                     .setTimestamp()
-                    .setFooter({
-                        text: `ID : ${memberToBan.id}`,
-                        iconURL: interaction.user.displayAvatarURL()
-                    });
+                    .setFooter({ text: `ID : ${memberToBan.id}` });
 
                 await logChannel.send({ embeds: [logEmbed] });
             }
 
         } catch (error) {
             console.error('Erreur lors de la commande ban:', error);
-            return interaction.reply({
-                content: '❌ Une erreur est survenue lors du bannissement.',
-                ephemeral: true
-            });
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply({ content: '❌ Une erreur est survenue lors du bannissement.', ephemeral: true });
+            } else {
+                await interaction.reply({ content: '❌ Une erreur est survenue lors du bannissement.', ephemeral: true });
+            }
         }
     }
 };

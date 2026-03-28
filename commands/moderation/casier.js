@@ -5,9 +5,7 @@ const {
     ChannelType
 } = require('discord.js');
 const { getCasier } = require('../../utils/casier');
-
-// On retire l'importation de isOwner, et on garde hasPermission pour les autres utilisateurs
-const hasPermission = require('../../utils/hasPermission'); 
+const hasPermission = require('../../utils/hasPermission');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -19,11 +17,8 @@ module.exports = {
                 .setRequired(true)),
 
     async execute(interaction) {
-        // IDs des salons de logs
         const LOG_MODO = '1382779351891705866';
 
-        // L'unique vérification de permission dont on a besoin ici
-        // La logique pour le propriétaire est maintenant dans index.js
         if (!hasPermission(interaction, [PermissionFlagsBits.KickMembers])) {
             return interaction.reply({
                 content: '❌ Tu n’as pas la permission d’utiliser cette commande.',
@@ -31,9 +26,9 @@ module.exports = {
             });
         }
 
-        try {
-            await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ ephemeral: true });
 
+        try {
             const user = interaction.options.getUser('member');
             const userTag = user.tag;
 
@@ -59,11 +54,8 @@ module.exports = {
                     .setColor('#e67e22');
             }
 
-            await interaction.editReply({
-                embeds: [embed],
-            });
+            await interaction.editReply({ embeds: [embed] });
 
-            // Log stylisé dans le salon LOG MODO
             const logChannel = interaction.guild.channels.cache.get(LOG_MODO);
             if (logChannel && logChannel.type === ChannelType.GuildText) {
                 const logEmbed = new EmbedBuilder()
@@ -75,10 +67,7 @@ module.exports = {
                         **Nombre d'infractions :** ${infractions.length}
                     `)
                     .setTimestamp()
-                    .setFooter({
-                        text: `ID : ${user.id}`,
-                        iconURL: interaction.user.displayAvatarURL()
-                    });
+                    .setFooter({ text: `ID : ${user.id}` });
 
                 await logChannel.send({ embeds: [logEmbed] });
             }
@@ -86,7 +75,7 @@ module.exports = {
         } catch (error) {
             console.error(error);
             await interaction.editReply({
-                content: `❌ Une erreur est survenue lors de la consultation : ${error.message}`,
+                content: `❌ Une erreur est survenue lors de la consultation.`,
             });
         }
     },

@@ -1,6 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const db = require('../../utils/database');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -30,49 +29,42 @@ module.exports = {
             return interaction.editReply({ content: '❌ Vous ne pouvez pas vous donner d\'argent à vous-même.' });
         }
 
+        const connection = await db.getConnection(); // Récupère une connexion du pool
         try {
-            // Vérifier le solde de l'expéditeur et le créer s'il n'existe pas
-            const senderUser = await prisma.user.upsert({
-                where: { id: sender.id },
-                update: {},
-                create: { id: sender.id, balance: 0, last_daily: null },
-                select: { balance: true }
-            });
+            await connection.beginTransaction(); // Démarre la transaction
+
+            // S'assurer que l'expéditeur existe et vérifier son solde
+            await connection.execute(
+                'INSERT INTO User (id, username, balance) VALUES (?, ?, 0) ON DUPLICATE KEY UPDATE id=id',
+                [sender.id, sender.username]
+            );
+            const [senderRows] = await connection.execute('SELECT balance FROM User WHERE id = ? FOR UPDATE', [sender.id]);
+            const senderUser = senderRows[0];
 
             if (senderUser.balance < amount) {
+                await connection.rollback(); // Annule la transaction
                 return interaction.editReply({ content: '❌ Vous n\'avez pas assez d\'argent pour effectuer cette transaction.' });
             }
 
-            // Exécuter la transaction (débit, crédit et enregistrement)
-            await prisma.$transaction(async (tx) => {
-                // Créer le destinataire s'il n'existe pas, sans affecter son last_daily
-                await tx.user.upsert({
-                    where: { id: recipient.id },
-                    update: {},
-                    create: { id: recipient.id, balance: 0, last_daily: null },
-                });
+            // S'assurer que le destinataire existe
+            await connection.execute(
+                'INSERT INTO User (id, username, balance) VALUES (?, ?, 0) ON DUPLICATE KEY UPDATE id=id',
+                [recipient.id, recipient.user.username]
+            );
 
-                // Débiter l'expéditeur
-                await tx.user.update({
-                    where: { id: sender.id },
-                    data: { balance: { decrement: amount } },
-                });
+            // Débiter l'expéditeur
+            await connection.execute('UPDATE User SET balance = balance - ? WHERE id = ?', [amount, sender.id]);
 
-                // Créditer le destinataire
-                await tx.user.update({
-                    where: { id: recipient.id },
-                    data: { balance: { increment: amount } },
-                });
+            // Créditer le destinataire
+            await connection.execute('UPDATE User SET balance = balance + ? WHERE id = ?', [amount, recipient.id]);
 
-                // Enregistrer la transaction dans la nouvelle table
-                await tx.transaction.create({
-                    data: {
-                        senderId: sender.id,
-                        recipientId: recipient.id,
-                        amount: amount,
-                    },
-                });
-            });
+            // Enregistrer la transaction
+            await connection.execute(
+                'INSERT INTO Transaction (senderId, recipientId, amount, type) VALUES (?, ?, ?, ?)',
+                [sender.id, recipient.id, amount, 'P2P_TRANSFER']
+            );
+
+            await connection.commit(); // Valide la transaction
 
             const embed = new EmbedBuilder()
                 .setTitle('💸 Transfert d\'argent réussi !')
@@ -82,10 +74,13 @@ module.exports = {
             await interaction.editReply({ embeds: [embed] });
 
         } catch (error) {
+            await connection.rollback(); // Annule la transaction en cas d'erreur
             console.error('Erreur lors de la commande /pay :', error);
             await interaction.editReply({
                 content: '❌ Une erreur est survenue lors de l\'exécution de la commande.',
             });
+        } finally {
+            connection.release(); // Libère la connexion pour qu'elle retourne au pool
         }
     },
 };

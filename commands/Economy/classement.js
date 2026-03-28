@@ -1,6 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const db = require('../../utils/database');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,36 +9,26 @@ module.exports = {
     async execute(interaction) {
         await interaction.deferReply();
 
-        // Récupère l'instance du client globalement
-        const client = interaction.client; 
+        const client = interaction.client;
 
         try {
             // 1. Récupérer les 10 premiers utilisateurs avec le plus d'argent
-            const topUsers = await prisma.user.findMany({
-                orderBy: {
-                    balance: 'desc',
-                },
-                take: 10,
-            });
+            const [topUsers] = await db.execute(
+                'SELECT id, username, balance FROM User ORDER BY balance DESC LIMIT 10'
+            );
 
             let classementText = '';
             for (let i = 0; i < topUsers.length; i++) {
                 const user = topUsers[i];
                 
-                // --- CORRECTION CLÉ : Utiliser client.users.fetch() ---
-                // Cela récupère l'utilisateur GLOBALEMENT via l'API Discord,
-                // sans dépendre de sa présence sur le serveur actuel (interaction.guild).
                 let discordUser;
                 try {
                     discordUser = await client.users.fetch(user.id);
                 } catch (e) {
-                    // Si l'utilisateur a supprimé son compte ou est inaccessible
-                    discordUser = null; 
+                    discordUser = null;
                 }
                 
-                // Utiliser le tag si disponible, sinon un message d'erreur clair
-                const username = discordUser ? discordUser.username : `Utilisateur Supprimé (${user.id})`;
-                // --------------------------------------------------------
+                const username = discordUser ? discordUser.username : (user.username || `Utilisateur Supprimé (${user.id})`);
                 
                 const emoji = i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
                 
@@ -47,15 +36,11 @@ module.exports = {
             }
 
             // 2. Trouver la position de l'utilisateur qui a fait la commande
-            const userBalance = await prisma.user.findUnique({
-                where: { id: interaction.user.id },
-                select: { balance: true }
-            });
-            
-            // Le calcul du rang est correct : compte ceux qui ont un solde plus grand.
-            const userRank = await prisma.user.count({
-                where: { balance: { gt: userBalance?.balance || 0 } }
-            }) + 1;
+            const [userBalanceRows] = await db.execute('SELECT balance FROM User WHERE id = ?', [interaction.user.id]);
+            const userBalance = userBalanceRows[0]?.balance || 0;
+
+            const [rankRows] = await db.execute('SELECT COUNT(*) as rank FROM User WHERE balance > ?', [userBalance]);
+            const userRank = rankRows[0].rank + 1;
 
             // 3. Construction de l'Embed
             const embed = new EmbedBuilder()
@@ -72,7 +57,7 @@ module.exports = {
             if (userRank > 10) {
                 embed.addFields({
                     name: 'Votre position',
-                    value: `Vous êtes actuellement à la **#${userRank}** place avec **${(userBalance?.balance || 0).toLocaleString()}€**.`,
+                    value: `Vous êtes actuellement à la **#${userRank}** place avec **${userBalance.toLocaleString()}€**.`,
                     inline: false,
                 });
             }
