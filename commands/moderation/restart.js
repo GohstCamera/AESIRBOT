@@ -1,7 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, ComponentType } = require('discord.js');
 const { spawn } = require('child_process');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const db = require('../../utils/database');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -9,7 +8,6 @@ module.exports = {
         .setDescription('Redémarre le bot (Propriétaire uniquement).'),
 
     async execute(interaction) {
-        // --- Sécurité : Vérification du propriétaire ---
         if (interaction.user.id !== process.env.OWNER_ID) {
             return interaction.reply({
                 content: '❌ Vous n\'avez pas la permission d\'exécuter cette commande.',
@@ -17,7 +15,6 @@ module.exports = {
             });
         }
 
-        // --- Étape 1 : Demande de confirmation ---
         const confirmButton = new ButtonBuilder()
             .setCustomId('confirm_restart')
             .setLabel('✅ Confirmer le redémarrage')
@@ -28,7 +25,7 @@ module.exports = {
         const confirmationEmbed = new EmbedBuilder()
             .setTitle('❓ Confirmation requise')
             .setDescription(`Êtes-vous sûr de vouloir redémarrer le bot **${interaction.client.user.username}** ?`)
-            .setColor('#f0ad4e') // Jaune/Orange pour l'avertissement
+            .setColor('#f0ad4e')
             .setTimestamp();
 
         const reply = await interaction.reply({
@@ -38,10 +35,9 @@ module.exports = {
             fetchReply: true
         });
 
-        // --- Étape 2 : Attente de la confirmation ---
         const collector = reply.createMessageComponentCollector({
             componentType: ComponentType.Button,
-            time: 30000, // 30 secondes pour répondre
+            time: 30000,
             filter: i => i.user.id === interaction.user.id && i.customId === 'confirm_restart'
         });
 
@@ -51,13 +47,13 @@ module.exports = {
                 embeds: [],
                 components: []
             });
-            console.log(`[RESTART] Commande de redémarrage confirmée par ${interaction.user.tag}.`);
 
-            // --- Étape 3 : Procédure de redémarrage propre ---
-            console.log('[RESTART] Déconnexion du client Discord...');
+            console.log(`[RESTART] Déconnexion du client Discord...`);
             await interaction.client.destroy();
-            console.log('[RESTART] Déconnexion de la base de données Prisma...');
-            await prisma.$disconnect();
+
+            console.log('[RESTART] Déconnexion de la base de données MySQL...');
+            await db.end();
+
             console.log('[RESTART] Lancement d\'un nouveau processus...');
 
             const fs = require('fs');

@@ -1,10 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const db = require('../../utils/database');
 
-const COOLDOWN_DURATION = 3600000; // 1 heure en millisecondes
+const COOLDOWN_DURATION = 3600000;
 
-// Définition des ressources et de leur gain de base
 const RESOURCES = [
     { name: 'bois', emoji: '🌳', min: 20, max: 80 },
     { name: 'pierre', emoji: '🪨', min: 15, max: 60 },
@@ -19,13 +17,21 @@ module.exports = {
     async execute(interaction) {
         await interaction.deferReply({ ephemeral: true });
 
+        const connection = await db.getConnection();
         try {
-            const user = await prisma.user.findUnique({
-                where: { userId: interaction.user.id },
-                include: { crew: true }
-            });
+            await connection.beginTransaction();
 
-            if (!user || !user.crew) {
+            const [userRows] = await connection.execute(`
+                SELECT u.crewId, u.farmCooldown, c.harvestBonusEndTime
+                FROM User u
+                LEFT JOIN Crew c ON u.crewId = c.id
+                WHERE u.id = ? FOR UPDATE
+            `, [interaction.user.id]);
+
+            const user = userRows[0];
+
+            if (!user || !user.crewId) {
+                await connection.rollback();
                 return interaction.editReply({ content: '❌ Tu dois être dans un clan pour utiliser cette commande !' });
             }
 
@@ -34,53 +40,38 @@ module.exports = {
                 const timeLeft = Math.ceil((new Date(user.farmCooldown).getTime() - now) / 1000);
                 const minutes = Math.floor(timeLeft / 60);
                 const seconds = timeLeft % 60;
+                await connection.rollback();
                 return interaction.editReply({
                     content: `⏳ Tu dois attendre encore **${minutes} minutes et ${seconds} secondes** avant de pouvoir récolter de nouveau.`
                 });
             }
 
-            // Calcul du gain pour chaque ressource
             let gains = {};
             let bonusApplied = false;
-            const harvestBonusEndTime = user.crew.harvestBonusEndTime;
+            const harvestBonusEndTime = user.harvestBonusEndTime ? new Date(user.harvestBonusEndTime) : null;
 
-            // Vérifie le bonus de récolte
-            if (harvestBonusEndTime && now < new Date(harvestBonusEndTime).getTime()) {
+            if (harvestBonusEndTime && now < harvestBonusEndTime.getTime()) {
                 bonusApplied = true;
             }
 
             for (const resource of RESOURCES) {
                 let baseGain = Math.floor(Math.random() * (resource.max - resource.min + 1)) + resource.min;
-                let finalGain = baseGain;
-                if (bonusApplied) {
-                    finalGain = Math.round(baseGain * 1.2); // Multiplicateur de 20%
-                }
+                let finalGain = bonusApplied ? Math.round(baseGain * 1.2) : baseGain;
                 gains[resource.name] = finalGain;
             }
 
-            // Mise à jour de la base de données
-            const newCooldown = new Date(now + COOLDOWN_DURATION);
-            const updateData = {
-                farmCooldown: newCooldown,
-            };
-            const updateCrewData = {
-                bois: { increment: gains.bois },
-                pierre: { increment: gains.pierre },
-                nourriture: { increment: gains.nourriture },
-            };
+            await connection.execute(
+                'UPDATE User SET farmCooldown = ? WHERE id = ?',
+                [new Date(now + COOLDOWN_DURATION), interaction.user.id]
+            );
 
-            await prisma.$transaction([
-                prisma.crew.update({
-                    where: { id: user.crew.id },
-                    data: updateCrewData,
-                }),
-                prisma.user.update({
-                    where: { userId: interaction.user.id },
-                    data: updateData,
-                })
-            ]);
+            await connection.execute(
+                'UPDATE Crew SET bois = bois + ?, pierre = pierre + ?, nourriture = nourriture + ? WHERE id = ?',
+                [gains.bois, gains.pierre, gains.nourriture, user.crewId]
+            );
 
-            // Construction de la réponse
+            await connection.commit();
+
             let description = `Tu as récolté :\n`;
             for (const resource of RESOURCES) {
                 description += `${resource.emoji} **${gains[resource.name]}** ${resource.name}\n`;
@@ -103,8 +94,11 @@ module.exports = {
             await interaction.editReply({ embeds: [embed] });
 
         } catch (error) {
+            await connection.rollback();
             console.error('❌ Erreur lors de l\'exécution de la commande /crew ferme :', error);
-            await interaction.editReply({ content: '❌ Une erreur est survenue lors de la récolte. Merci de réessayer plus tard.' });
+            await interaction.editReply({ content: '❌ Une erreur est survenue lors de la récolte.' });
+        } finally {
+            connection.release();
         }
     }
 };

@@ -2,8 +2,7 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Collection, Events, REST, Routes, ActivityType } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const db = require('./utils/database'); // Importe la connexion MySQL
 
 // --- Importation du chargeur de plugins ---
 const loadPlugins = require('./plugins');
@@ -130,21 +129,16 @@ client.once(Events.ClientReady, async () => {
     try {
         console.log(`🚀 Début du rafraîchissement des ${commands.length} commandes slash.`);
 
-        // Pour le développement, on déploie les commandes uniquement sur le serveur de test (GUILD_ID)
-        // C'est instantané, contrairement au déploiement global.
-        // Assurez-vous que GUILD_ID est bien défini dans votre fichier .env
-        const guildId = process.env.GUILD_ID; // ID du serveur de test
+        const guildId = process.env.GUILD_ID;
 
         if (guildId) {
-            // Déploiement LOCAL (pour le développement)
             await rest.put(
                 Routes.applicationGuildCommands(client.user.id, guildId),
                 { body: commands }
             );
             console.log(`✅ Commandes slash rechargées avec succès sur le serveur de test (ID: ${guildId}).`);
         } else {
-            // Déploiement GLOBAL (pour la production)
-            console.warn("⚠️ GUILD_ID non trouvé dans .env. Déploiement des commandes en mode global. (Peut prendre jusqu'à 1 heure)");
+            console.warn("⚠️ GUILD_ID non trouvé dans .env. Déploiement des commandes en mode global.");
             await rest.put(
                 Routes.applicationCommands(client.user.id),
                 { body: commands }
@@ -153,13 +147,10 @@ client.once(Events.ClientReady, async () => {
         }
 
     } catch (error) {
-        console.error('❌ Erreur lors du nettoyage ou de la synchronisation:', error);
+        console.error('❌ Erreur lors de la synchronisation des commandes:', error);
     }
 
-    // --- Activation des plugins après la connexion et le déploiement ---
     loadPlugins(client);
-    // Le message 'Anti-crash bien lancé' est maintenant dans le module antiCrash.
-    // ------------------------------------------------------------------
 });
 
 // =======================================================
@@ -186,7 +177,6 @@ if (fs.existsSync(eventsPath)) {
 
 // ⚡ Gestion des interactions slash
 client.on(Events.InteractionCreate, async interaction => {
-    // Gestion des Slash Commands
     if (interaction.isChatInputCommand()) {
         const command = client.commands.get(interaction.commandName);
         if (!command) return;
@@ -195,17 +185,11 @@ client.on(Events.InteractionCreate, async interaction => {
         console.log(`[${time}] ${interaction.user.tag} a utilisé /${interaction.commandName} sur ${interaction.guild?.name || 'DM'}`);
 
         try {
-            // La logique de permission est maintenant gérée directement dans les commandes
-            // ou par les permissions par défaut de la commande.
             await command.execute(interaction);
         } catch (error) {
             console.error(`❌ Erreur dans /${interaction.commandName}:`, error);
 
-            // Si l'erreur est "Unknown Interaction", on ne tente pas de répondre car le token est déjà invalide.
-            if (error.code === 10062) {
-                console.warn(`[WARN] L'interaction /${interaction.commandName} a expiré avant qu'une réponse puisse être envoyée.`);
-                return;
-            }
+            if (error.code === 10062) return;
 
             const errorMessage = '❌ Une erreur critique est survenue lors de cette action.';
             try {
@@ -215,19 +199,14 @@ client.on(Events.InteractionCreate, async interaction => {
                     await interaction.reply({ content: errorMessage, ephemeral: true });
                 }
             } catch (e) {
-                console.error(`❌ Impossible d'envoyer le message d'erreur pour /${interaction.commandName}:`, e);
+                console.error(`❌ Impossible d'envoyer le message d'erreur:`, e);
             }
         }
-        // Pas besoin de return ici, la portée de l'événement se termine naturellement.
     }
 
-    // =======================================================
-    // 🧠 GESTION DES MODALS, BOUTONS ET MENUS
-    // =======================================================
     else if (interaction.isModalSubmit() || interaction.isButton() || interaction.isStringSelectMenu()) {
-        // --- Routeur Spécifique pour la commande /anim ---
-        if (interaction.customId.startsWith('anim_')) { // Le préfixe est resté 'anim_'
-            const command = client.commands.get('animation'); // Mais le nom de la commande est 'animation'
+        if (interaction.customId.startsWith('anim_')) {
+            const command = client.commands.get('animation');
             if (!command) return;
 
             try {
@@ -245,11 +224,7 @@ client.on(Events.InteractionCreate, async interaction => {
                     await command.handleVoiceChannelSelect(interaction);
                 }
             } catch (error) {
-                console.error(`❌ Erreur dans le handler de l'interaction anim :`, error);
-                if (error.code === 10062) {
-                    console.warn(`[WARN] L'interaction anim (${interaction.customId}) a expiré.`);
-                    return;
-                }
+                console.error(`❌ Erreur dans le handler anim:`, error);
                 const errorMessage = '❌ Une erreur est survenue lors de cette étape.';
                 try {
                     if (interaction.replied || interaction.deferred) {
@@ -257,52 +232,32 @@ client.on(Events.InteractionCreate, async interaction => {
                     } else {
                         await interaction.reply({ content: errorMessage, ephemeral: true });
                     }
-                } catch (e) {
-                    console.error(`❌ Impossible d'envoyer le message d'erreur pour l'interaction anim:`, e);
-                }
+                } catch (e) {}
             }
-            return; // On arrête ici pour ne pas passer dans le routeur générique
+            return;
         }
-
-        console.log(`[DEBUG-ROUTER] Interaction personnalisée. CustomID: ${interaction.customId}.`);
 
         let handlerKey;
-
         if (interaction.isModalSubmit() && interaction.customId === 'create_crew_modal') {
-            // Routage forcé vers le handler 'crew' pour la création de clan (exemple)
             handlerKey = 'crew';
-            console.log(`[DEBUG-ROUTER] Modal de clan détecté. Routage forcé vers 'crew'.`);
-
         } else {
-            // Logique de routage standard basée sur le customId.split('_')[0]
             handlerKey = interaction.customId.split('_')[0];
-            console.log(`[DEBUG-ROUTER] Clé standard déterminée: '${handlerKey}'.`);
         }
 
-        // Exécute le gestionnaire si trouvé
         if (interactionHandlers.has(handlerKey)) {
             try {
-                console.log(`[DEBUG-ROUTER] Exécution de handler pour la clé: '${handlerKey}'.`);
                 await interactionHandlers.get(handlerKey)(interaction);
             } catch (error) {
-                console.error(`❌ Erreur lors de la gestion de l'interaction '${interaction.customId}':`, error);
-                if (error.code === 10062) {
-                    console.warn(`[WARN] L'interaction '${interaction.customId}' a expiré.`);
-                    return;
-                }
-                const errorMessage = '❌ Une erreur est survenue lors de l\'exécution de cette action.';
+                console.error(`❌ Erreur dans interactionHandler '${handlerKey}':`, error);
+                const errorMessage = '❌ Une erreur est survenue lors de cette action.';
                 try {
                     if (interaction.deferred || interaction.replied) {
                         await interaction.editReply({ content: errorMessage, components: [], embeds: [] }).catch(() => {});
                     } else {
                         await interaction.reply({ content: errorMessage, ephemeral: true }).catch(() => {});
                     }
-                } catch (e) {
-                    console.error(`❌ Impossible d'envoyer le message d'erreur pour l'interaction '${interaction.customId}':`, e);
-                }
+                } catch (e) {}
             }
-        } else {
-            console.warn(`[DEBUG-ROUTER] Aucun handler trouvé pour la clé: '${handlerKey}'. Interaction ignorée.`);
         }
     }
 });
@@ -311,37 +266,28 @@ client.on(Events.InteractionCreate, async interaction => {
 client.login(process.env.DISCORD_TOKEN).catch(console.error);
 
 // =======================================================
-// --- GESTION DE L'ARRÊT PROPRE (GRACEFUL SHUTDOWN) ---
+// --- GESTION DE L'ARRÊT PROPRE ---
 // =======================================================
 
-/**
- * Fonction pour gérer l'arrêt propre du bot : 
- * déconnexion de Discord et de la base de données.
- */
 async function shutdown() {
-    console.log('\n🛑 Signal d\'arrêt reçu (Ctrl+C). Démarrage de la procédure d\'extinction...');
+    console.log('\n🛑 Signal d\'arrêt reçu. Extinction...');
 
-    // 1. Déconnexion du client Discord (Met le bot HORS LIGNE immédiatement)
     if (client.isReady()) {
         console.log('🔌 Déconnexion du client Discord...');
         client.user.setPresence({ status: 'invisible' });
         client.destroy();
     }
 
-    // 2. Fermer la connexion à la base de données Prisma
     try {
-        await prisma.$disconnect();
-        console.log('💾 Déconnexion de Prisma réussie.');
+        await db.end();
+        console.log('💾 Déconnexion de MySQL réussie.');
     } catch (e) {
-        // La déconnexion a échoué, mais on continue l'arrêt
-        console.error('❌ Erreur lors de la déconnexion de Prisma (ignorer si le bot est déjà arrêté):', e);
+        console.error('❌ Erreur lors de la déconnexion de MySQL:', e);
     }
 
-    // 3. Quitter le processus Node.js
-    console.log('👋 Adieu ! Le processus est terminé.');
+    console.log('👋 Adieu !');
     process.exit(0);
 }
 
-// 👂 Écoute des signaux d'arrêt (SIGINT pour Ctrl+C, SIGTERM pour commandes kill/systèmes)
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);

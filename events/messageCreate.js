@@ -1,6 +1,4 @@
 const { Events } = require('discord.js');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
 const voteAPI = require('../utils/voteAPI');
 
 const VOTE_REWARD = 100;

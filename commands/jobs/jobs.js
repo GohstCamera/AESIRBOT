@@ -1,6 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const db = require('../../utils/database');
 
 const JOBS_LIST = [
     { id: 'bucheron', name: 'Bûcheron', cost: { bois: 500, pierre: 100 }, description: 'Récolte du bois pour ton clan.', emoji: '🪓' },
@@ -26,72 +25,89 @@ module.exports = {
     async execute(interaction) {
         await interaction.deferReply({ ephemeral: false });
 
-        const user = await prisma.user.findUnique({
-            where: { id: interaction.user.id },
-            include: { crew: true }
-        });
+        const connection = await db.getConnection();
+        try {
+            await connection.beginTransaction();
 
-        if (!user || !user.crew) {
-            return interaction.editReply({ content: '❌ Tu dois être dans un clan pour utiliser les jobs.' });
+            const [userRows] = await connection.execute(`
+                SELECT u.professions, u.crewId, c.bois, c.pierre, c.nourriture
+                FROM User u
+                LEFT JOIN Crew c ON u.crewId = c.id
+                WHERE u.id = ? FOR UPDATE
+            `, [interaction.user.id]);
+
+            const user = userRows[0];
+
+            if (!user || !user.crewId) {
+                await connection.rollback();
+                return interaction.editReply({ content: '❌ Tu dois être dans un clan pour utiliser les jobs.' });
+            }
+
+            const jobId = interaction.options.getString('job');
+            const jobToBuy = JOBS_LIST.find(job => job.id === jobId);
+
+            if (!jobToBuy) {
+                await connection.rollback();
+                return interaction.editReply({ content: '❌ Ce job n\'existe pas.' });
+            }
+
+            const userJobs = user.professions ? user.professions.split(',').filter(j => j.length > 0) : [];
+            if (userJobs.includes(jobId)) {
+                await connection.rollback();
+                return interaction.editReply({ content: `❌ Tu possèdes déjà le job de ${jobToBuy.name}.` });
+            }
+
+            const cost = jobToBuy.cost || {};
+            const woodCost = cost.bois || 0;
+            const stoneCost = cost.pierre || 0;
+            const foodCost = cost.nourriture || 0;
+
+            if (user.bois < woodCost || user.pierre < stoneCost || user.nourriture < foodCost) {
+                const missingResources = [];
+                if (user.bois < woodCost) missingResources.push(`${woodCost - user.bois} bois`);
+                if (user.pierre < stoneCost) missingResources.push(`${stoneCost - user.pierre} pierre`);
+                if (user.nourriture < foodCost) missingResources.push(`${foodCost - user.nourriture} nourriture`);
+
+                await connection.rollback();
+                return interaction.editReply({
+                    content: `❌ Ton clan n'a pas assez de ressources pour acheter le job de ${jobToBuy.name}. Il vous manque : ${missingResources.join(', ')}.`,
+                });
+            }
+
+            userJobs.push(jobId);
+            const updatedJobsString = userJobs.join(',');
+
+            await connection.execute(
+                'UPDATE User SET professions = ? WHERE id = ?',
+                [updatedJobsString, interaction.user.id]
+            );
+
+            await connection.execute(
+                'UPDATE Crew SET bois = bois - ?, pierre = pierre - ?, nourriture = nourriture - ? WHERE id = ?',
+                [woodCost, stoneCost, foodCost, user.crewId]
+            );
+
+            await connection.commit();
+
+            const costString = Object.entries(cost).map(([key, value]) => `${key.charAt(0).toUpperCase() + key.slice(1)}: ${value}`).join('\n');
+
+            const embed = new EmbedBuilder()
+                .setTitle(`✅ Job acheté !`)
+                .setDescription(`Tu es maintenant un **${jobToBuy.name}** !`)
+                .setColor('#2ecc71')
+                .addFields(
+                    { name: 'Coût', value: costString }
+                )
+                .setTimestamp();
+
+            await interaction.editReply({ embeds: [embed] });
+
+        } catch (error) {
+            await connection.rollback();
+            console.error('❌ Erreur lors de l\'achat de job :', error);
+            await interaction.editReply({ content: '❌ Une erreur est survenue lors de l\'achat du job.' });
+        } finally {
+            connection.release();
         }
-
-        const jobId = interaction.options.getString('job');
-        const jobToBuy = JOBS_LIST.find(job => job.id === jobId);
-
-        if (!jobToBuy) {
-            return interaction.editReply({ content: '❌ Ce job n\'existe pas.' });
-        }
-
-        const userJobs = user.jobs ? user.jobs.split(',').filter(j => j.length > 0) : [];
-        if (userJobs.includes(jobId)) {
-            return interaction.editReply({ content: `❌ Tu possèdes déjà le job de ${jobToBuy.name}.` });
-        }
-
-        const crew = user.crew;
-        const cost = jobToBuy.cost || {};
-        const woodCost = cost.bois || 0;
-        const stoneCost = cost.pierre || 0;
-        const foodCost = cost.nourriture || 0;
-
-        if (crew.bois < woodCost || crew.pierre < stoneCost || crew.nourriture < foodCost) {
-            const missingResources = [];
-            if (crew.bois < woodCost) missingResources.push(`${woodCost - crew.bois} bois`);
-            if (crew.pierre < stoneCost) missingResources.push(`${stoneCost - crew.pierre} pierre`);
-            if (crew.nourriture < foodCost) missingResources.push(`${foodCost - crew.nourriture} nourriture`);
-
-            return interaction.editReply({
-                content: `❌ Ton clan n'a pas assez de ressources pour acheter le job de ${jobToBuy.name}. Il vous manque : ${missingResources.join(', ')}.`,
-            });
-        }
-
-        const updatedJobs = [...userJobs, jobId];
-
-        await prisma.$transaction([
-            prisma.user.update({
-                where: { id: user.id },
-                data: { jobs: updatedJobs.join(',') },
-            }),
-            prisma.crew.update({
-                where: { id: crew.id },
-                data: {
-                    bois: { decrement: woodCost },
-                    pierre: { decrement: stoneCost },
-                    nourriture: { decrement: foodCost },
-                },
-            }),
-        ]);
-
-        const costString = Object.entries(cost).map(([key, value]) => `${key.charAt(0).toUpperCase() + key.slice(1)}: ${value}`).join('\n');
-
-        const embed = new EmbedBuilder()
-            .setTitle(`✅ Job acheté !`)
-            .setDescription(`Tu es maintenant un **${jobToBuy.name}** !`)
-            .setColor('#2ecc71')
-            .addFields(
-                { name: 'Coût', value: costString }
-            )
-            .setTimestamp();
-
-        await interaction.editReply({ embeds: [embed] });
     },
 };

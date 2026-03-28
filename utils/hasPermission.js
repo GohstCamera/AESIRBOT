@@ -4,7 +4,7 @@ const { PermissionsBitField } = require('discord.js');
 // require('dotenv').config();
 
 // ID du super utilisateur fixe (pour les tests ou une personne spécifique)
-const CUSTOM_SUPERUSER_ID = '743155509691023431'; 
+const CUSTOM_SUPERUSER_ID = '743155509691023431';
 
 // ID du propriétaire tiré du fichier .env
 // Assurez-vous d'avoir une ligne comme OWNER_ID=VOTRE_ID dans votre .env

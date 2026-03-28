@@ -1,8 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const db = require('../../utils/database');
 
-// Définition des prix de vente des ressources (par unité)
 const SELL_PRICES = {
     bois: 2,
     pierre: 3,
@@ -33,68 +31,64 @@ module.exports = {
         const resourceToSell = interaction.options.getString('ressource');
         let quantityToSell = interaction.options.getInteger('quantite');
 
+        const connection = await db.getConnection();
         try {
-            // 1. On récupère les informations de l'utilisateur et de son clan
-            const user = await prisma.user.findUnique({
-                where: { id: interaction.user.id },
-                include: { crew: true }
-            });
+            await connection.beginTransaction();
 
-            if (!user || !user.crew) {
+            const [userRows] = await connection.execute(`
+                SELECT u.balance, u.crewId, c.bois, c.pierre, c.nourriture
+                FROM User u
+                LEFT JOIN Crew c ON u.crewId = c.id
+                WHERE u.id = ? FOR UPDATE
+            `, [interaction.user.id]);
+
+            const user = userRows[0];
+
+            if (!user || !user.crewId) {
+                await connection.rollback();
                 return interaction.editReply({ content: '❌ Tu dois être dans un clan pour vendre des ressources.' });
             }
 
-            // 2. On vérifie si la ressource demandée existe dans les données du clan
-            const currentQuantity = user.crew[resourceToSell];
+            const currentQuantity = user[resourceToSell];
             if (currentQuantity === undefined) {
+                await connection.rollback();
                 return interaction.editReply({ content: '❌ Cette ressource n\'existe pas.' });
             }
 
-            // 3. On détermine la quantité à vendre
             if (quantityToSell === null || quantityToSell > currentQuantity) {
                 quantityToSell = currentQuantity;
             }
 
             if (quantityToSell <= 0) {
+                await connection.rollback();
                 return interaction.editReply({ content: `❌ Ton clan n'a pas de ${resourceToSell} à vendre.` });
             }
 
-            // 4. On calcule le gain total
             const price = SELL_PRICES[resourceToSell];
             const totalGain = quantityToSell * price;
 
-            // 5. On met à jour la base de données (déduction des ressources du clan et ajout de l'argent au joueur)
-            const updateCrewData = {};
-            updateCrewData[resourceToSell] = { decrement: quantityToSell };
+            await connection.execute(`UPDATE Crew SET \`${resourceToSell}\` = \`${resourceToSell}\` - ? WHERE id = ?`, [quantityToSell, user.crewId]);
+            await connection.execute('UPDATE User SET balance = balance + ? WHERE id = ?', [totalGain, interaction.user.id]);
 
-            const [, updatedUser] = await prisma.$transaction([
-                // Déduction des ressources du clan
-                prisma.crew.update({
-                    where: { id: user.crew.id },
-                    data: updateCrewData,
-                }),
-                // Ajout de l'argent au solde de l'utilisateur
-                prisma.user.update({
-                    where: { id: interaction.user.id },
-                    data: { balance: { increment: totalGain } }
-                })
-            ]);
+            await connection.commit();
 
-            // 6. On envoie la réponse
             const embed = new EmbedBuilder()
                 .setTitle('💰 Ressources vendues !')
                 .setDescription(`Tu as vendu **${quantityToSell}** ${resourceToSell} et ton clan a gagné **${totalGain}€** !`)
                 .setColor('#F1C40F')
                 .addFields(
-                    { name: 'Nouveau Solde', value: `**${(updatedUser.balance).toLocaleString()}€**` }
+                    { name: 'Nouveau Solde', value: `**${(user.balance + totalGain).toLocaleString()}€**` }
                 )
                 .setTimestamp();
 
             await interaction.editReply({ embeds: [embed] });
 
         } catch (error) {
-            console.error(`❌ Erreur lors de l'exécution de la commande /crew vendre :`, error);
-            await interaction.editReply({ content: '❌ Une erreur est survenue lors de la vente des ressources. Merci de réessayer plus tard.' });
+            await connection.rollback();
+            console.error(error);
+            await interaction.editReply({ content: '❌ Erreur.' });
+        } finally {
+            connection.release();
         }
     }
 };
