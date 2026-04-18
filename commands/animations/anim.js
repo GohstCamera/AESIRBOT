@@ -5,12 +5,10 @@ const {
     EmbedBuilder,
     ActionRowBuilder,
     StringSelectMenuBuilder,
-    ChannelSelectMenuBuilder,
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
     ButtonBuilder,
-    MessageFlags,
     ButtonStyle,
     ScheduledEntityType,
 } = require('discord.js');
@@ -33,7 +31,6 @@ module.exports = {
         const requiredRoleId = '1002927692489969724';
         const hasPermission = require('../../utils/hasPermission');
 
-        // Vérifie si l'utilisateur a le rôle requis OU s'il est un administrateur/propriétaire
         if (!interaction.member.roles.cache.has(requiredRoleId) && !hasPermission(interaction, ['Administrator'])) {
             return interaction.reply({
                 content: '❌ Vous n\'avez pas la permission d\'utiliser cette commande.',
@@ -41,14 +38,18 @@ module.exports = {
             });
         }
 
-        // On accuse réception immédiatement pour éviter les timeouts
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        // Utilisation de deferReply pour éviter le timeout de 3s
+        try {
+            await interaction.deferReply({ ephemeral: true });
+        } catch (e) {
+            console.error("Erreur lors du deferReply:", e);
+            return;
+        }
 
         const providedChannel = interaction.options.getChannel('canal');
-        const interactionId = uuidv4(); // ID unique pour cette session de création
+        const interactionId = uuidv4();
 
         if (providedChannel) {
-            // Si un canal est fourni, on passe directement à l'étape suivante
             const button = new ButtonBuilder()
                 .setCustomId(`anim_show_modal_${interactionId}_${providedChannel.id}`)
                 .setLabel('📝 Remplir les détails')
@@ -60,7 +61,6 @@ module.exports = {
                 components: [row],
             });
         } else {
-            // Sinon, on affiche le menu de sélection de canal
             const embed = new EmbedBuilder()
                 .setTitle('Création d\'une nouvelle animation')
                 .setDescription('Veuillez sélectionner le canal dans lequel l\'animation sera publiée.')
@@ -73,7 +73,7 @@ module.exports = {
                     interaction.guild.channels.cache
                         .filter(c => c.type === ChannelType.GuildText)
                         .map(c => ({ label: c.name, value: c.id }))
-                        .slice(0, 25) // Limite de 25 options
+                        .slice(0, 25)
                 );
 
             const row = new ActionRowBuilder().addComponents(selectMenu);
@@ -86,6 +86,9 @@ module.exports = {
     },
 
     async handleChannelSelect(interaction) {
+        // ACCUSÉ DE RÉCEPTION de l'interaction de sélection
+        await interaction.deferUpdate();
+
         const interactionId = interaction.customId.split('_')[3];
         const channelId = interaction.values[0];
 
@@ -104,6 +107,7 @@ module.exports = {
     },
 
     async handleShowModal(interaction) {
+        // Pas de deferUpdate ici car showModal est une réponse directe
         const interactionId = interaction.customId.split('_')[3];
         const channelId = interaction.customId.split('_')[4];
 
@@ -129,17 +133,11 @@ module.exports = {
     },
 
     async handleModalSubmit(interaction) {
-        // On accuse réception de la soumission du modal en différant la mise à jour du message précédent.
+        // Accusé de réception de la soumission du modal
         await interaction.deferUpdate();
 
         const interactionId = interaction.customId.split('_')[3];
-
         const channelId = interaction.customId.split('_')[4];
-        const channel = await interaction.guild.channels.fetch(channelId);
-
-        if (!channel) {
-            return interaction.followUp({ content: '❌ Le canal sélectionné n\'existe plus.', flags: MessageFlags.Ephemeral });
-        }
 
         const title = interaction.fields.getTextInputValue('title');
         const description = interaction.fields.getTextInputValue('description');
@@ -147,18 +145,16 @@ module.exports = {
         const time = interaction.fields.getTextInputValue('time');
         const slots = parseInt(interaction.fields.getTextInputValue('places') || '0', 10) || 0;
 
-        const dateTimeString = `${date} ${time}`;
-        const animationDateTime = moment(dateTimeString, 'DD/MM/YYYY HH:mm', true);
+        const animationDateTime = moment(`${date} ${time}`, 'DD/MM/YYYY HH:mm', true);
 
         if (!animationDateTime.isValid()) {
-            return interaction.followUp({ content: '❌ Format de date ou d\'heure invalide. Utilisez `JJ/MM/AAAA` et `HH:MM`.', flags: MessageFlags.Ephemeral });
+            return interaction.followUp({ content: '❌ Format de date ou d\'heure invalide.', ephemeral: true });
         }
 
         if (animationDateTime.isBefore(moment())) {
-            return interaction.followUp({ content: '❌ La date de l\'animation ne peut pas être dans le passé.', ephemeral: true });
+            return interaction.followUp({ content: '❌ La date ne peut pas être dans le passé.', ephemeral: true });
         }
 
-        // --- Étape suivante : Choix du type d'événement (En ligne / Physique) ---
         const onlineButton = new ButtonBuilder()
             .setCustomId(`anim_type_online_${interactionId}`)
             .setLabel('En ligne')
@@ -183,66 +179,23 @@ module.exports = {
             author: { tag: interaction.user.tag, avatar: interaction.user.displayAvatarURL() }
         });
 
-        // On utilise followUp pour envoyer un nouveau message éphémère après le deferUpdate
-        await interaction.followUp({
+        await interaction.editReply({
             content: 'Dernière étape : choix du type d\'événement.',
             embeds: [embed],
-            components: [row],
-            flags: MessageFlags.Ephemeral
+            components: [row]
         });
     },
 
-    async handleVoiceChannelSelect(interaction) {
-        // Cette fonction est maintenant obsolète, mais nous la gardons pour la compatibilité
-        // et la redirigeons vers la nouvelle logique si nécessaire.
-        // Pour l'instant, nous allons simplement la laisser vide ou la supprimer si elle n'est plus appelée.
-    },
-
-    async createScheduledEvent(interaction, interactionId, entityOptions) {
-        const animData = animationManager.getTempData(interactionId);
-
-        const { title, description, date, time, slots } = animData;
-        const animationDateTime = moment(`${date} ${time}`, 'DD/MM/YYYY HH:mm');
-
-        // Concaténer la description avec le nombre de places
-        const eventDescription = `${description}\n\n` +
-                                 `--------------------\n` +
-                                 `Places : ${slots === 0 ? 'Illimitées' : slots}`;
-
-        try {
-            const scheduledEvent = await interaction.guild.scheduledEvents.create({
-                name: title,
-                description: eventDescription,
-                scheduledStartTime: animationDateTime.toDate(),
-                privacyLevel: 2, // GuildOnly
-                ...entityOptions,
-            });
-
-            const successEmbed = new EmbedBuilder()
-                .setTitle('✅ Événement créé avec succès !')
-                .setDescription(`L'événement **${title}** a été programmé.`)
-                .setURL(scheduledEvent.url)
-                .setColor('#2ecc71');
-
-            // On utilise editReply sur le message "Dernière étape..."
-            await interaction.editReply({ content: '', embeds: [successEmbed], components: [] });
-
-        } catch (error) {
-            console.error("Erreur lors de la création de l'événement Discord :", error);
-            await interaction.editReply({ content: `❌ Une erreur est survenue. Vérifiez que j'ai bien la permission de "Gérer les événements" sur le serveur.`, embeds: [], components: [] });
-        }
-
-        animationManager.clearTempData(interactionId);
-    },
-
     async handleEventTypeSelect(interaction) {
+        await interaction.deferUpdate();
+
         const parts = interaction.customId.split('_');
-        const eventType = parts[2]; // 'online' ou 'physical'
+        const eventType = parts[2];
         const interactionId = parts[3];
 
         const animData = animationManager.getTempData(interactionId);
         if (!animData) {
-            return interaction.editReply({ content: '❌ Les données de cette animation ont expiré. Veuillez recommencer.', embeds: [], components: [] });
+            return interaction.editReply({ content: '❌ Données expirées.', embeds: [], components: [] });
         }
 
         if (eventType === 'online') {
@@ -252,17 +205,15 @@ module.exports = {
             };
             await this.createScheduledEvent(interaction, interactionId, entityOptions);
         } else if (eventType === 'physical') {
-            // Afficher un modal pour demander l'adresse
             const addressModal = new ModalBuilder()
                 .setCustomId(`anim_address_modal_${interactionId}`)
                 .setTitle('Adresse de l\'événement');
 
             const addressInput = new TextInputBuilder()
                 .setCustomId('address')
-                .setLabel("Adresse complète de l'événement")
+                .setLabel("Adresse complète")
                 .setStyle(TextInputStyle.Short)
-                .setRequired(true)
-                .setPlaceholder('Ex: 123 Rue de l\'Exemple, 63000 Clermont-Ferrand');
+                .setRequired(true);
 
             addressModal.addComponents(new ActionRowBuilder().addComponents(addressInput));
             await interaction.showModal(addressModal);
@@ -275,22 +226,48 @@ module.exports = {
         const interactionId = parts[3];
 
         const animData = animationManager.getTempData(interactionId);
-        if (!animData) {
-            return interaction.editReply({ content: '❌ Les données de cette animation ont expiré. Veuillez recommencer.', embeds: [], components: [] });
-        }
+        if (!animData) return interaction.editReply({ content: '❌ Données expirées.' });
 
         const address = interaction.fields.getTextInputValue('address');
-
-        if (!address) {
-            return interaction.editReply({ content: '❌ L\'adresse ne peut pas être vide.', embeds: [], components: [] });
-        }
-
         const entityOptions = {
             entityType: ScheduledEntityType.External,
             entityMetadata: { location: address },
         };
 
-        // On utilise l'interaction du modal (qui a été différée) pour répondre.
         await this.createScheduledEvent(interaction, interactionId, entityOptions);
-    }
+    },
+
+    async createScheduledEvent(interaction, interactionId, entityOptions) {
+        const animData = animationManager.getTempData(interactionId);
+        const { title, description, date, time, slots } = animData;
+        const animationDateTime = moment(`${date} ${time}`, 'DD/MM/YYYY HH:mm');
+
+        const eventDescription = `${description}\n\n--------------------\nPlaces : ${slots === 0 ? 'Illimitées' : slots}`;
+
+        try {
+            const scheduledEvent = await interaction.guild.scheduledEvents.create({
+                name: title,
+                description: eventDescription,
+                scheduledStartTime: animationDateTime.toDate(),
+                privacyLevel: 2,
+                ...entityOptions,
+            });
+
+            const successEmbed = new EmbedBuilder()
+                .setTitle('✅ Événement créé !')
+                .setDescription(`L'événement **${title}** a été programmé.`)
+                .setURL(scheduledEvent.url)
+                .setColor('#2ecc71');
+
+            await interaction.editReply({ content: '', embeds: [successEmbed], components: [] });
+
+        } catch (error) {
+            console.error(error);
+            await interaction.editReply({ content: `❌ Erreur lors de la création de l'événement.` });
+        }
+
+        animationManager.clearTempData(interactionId);
+    },
+
+    async handleVoiceChannelSelect(interaction) {}
 };

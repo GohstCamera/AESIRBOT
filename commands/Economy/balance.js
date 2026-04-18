@@ -1,6 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const db = require('../../utils/database');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -19,32 +18,22 @@ module.exports = {
         const initialBalance = 0;
 
         try {
-            let user = await prisma.user.findUnique({
-                where: { id: userId },
-                select: { balance: true }
-            });
+            const [rows] = await db.execute('SELECT balance FROM User WHERE id = ?', [userId]);
+            let userBalance;
 
-            let userBalance = 0;
-
-            if (!user) {
-                // The user doesn't exist, so we need to create them.
-                // We MUST provide the 'last_daily' field as it's required in your schema.
-                user = await prisma.user.create({
-                    data: {
-                        id: userId,
-                        balance: initialBalance,
-                        last_daily: null, // Set to null so they can use /daily immediately
-                    },
-                    select: { balance: true }
-                });
-                userBalance = user.balance;
+            if (rows.length === 0) {
+                await db.execute(
+                    'INSERT INTO User (id, username, balance, last_daily) VALUES (?, ?, ?, ?)',
+                    [userId, member.user.username, initialBalance, null]
+                );
+                userBalance = initialBalance;
             } else {
-                userBalance = user.balance;
+                userBalance = rows[0].balance;
             }
 
             const embed = new EmbedBuilder()
                 .setTitle(`💰 Solde de ${member.user.username}`)
-                .setDescription(`**Solde :** ${userBalance} 🪙`)
+                .setDescription(`**Solde :** ${userBalance.toLocaleString()}€`)
                 .setColor('#f4c430');
 
             await interaction.editReply({ embeds: [embed] });
@@ -53,7 +42,6 @@ module.exports = {
             console.error('Erreur lors de la récupération du solde :', error);
             await interaction.editReply({
                 content: '❌ Une erreur est survenue lors de la récupération du solde.',
-                ephemeral: false
             });
         }
     },

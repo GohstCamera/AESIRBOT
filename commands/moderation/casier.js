@@ -2,7 +2,8 @@ const {
     SlashCommandBuilder,
     EmbedBuilder,
     PermissionFlagsBits,
-    ChannelType
+    ChannelType,
+    MessageFlags
 } = require('discord.js');
 const { getCasier } = require('../../utils/casier');
 const hasPermission = require('../../utils/hasPermission');
@@ -17,16 +18,21 @@ module.exports = {
                 .setRequired(true)),
 
     async execute(interaction) {
+        // ACCUSE RÉCEPTION IMMÉDIATEMENT
+        try {
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        } catch (e) {
+            console.error("Erreur deferReply casier:", e);
+            return;
+        }
+
         const LOG_MODO = '1382779351891705866';
 
         if (!hasPermission(interaction, [PermissionFlagsBits.KickMembers])) {
-            return interaction.reply({
+            return interaction.editReply({
                 content: '❌ Tu n’as pas la permission d’utiliser cette commande.',
-                ephemeral: true
             });
         }
-
-        await interaction.deferReply({ ephemeral: true });
 
         try {
             const user = interaction.options.getUser('member');
@@ -42,7 +48,7 @@ module.exports = {
                     .setColor('#2ecc71');
             } else {
                 const infractionsList = infractions.map((infraction, index) => {
-                    const date = new Date(infraction.date).toLocaleDateString('fr-FR');
+                    const date = infraction.date ? new Date(infraction.date).toLocaleDateString('fr-FR') : 'Date inconnue';
                     return `**${index + 1}.** \`${infraction.type.toUpperCase()}\` le ${date}\n` +
                         `> **Raison :** ${infraction.reason || 'Non spécifiée'}\n` +
                         `> **Modérateur :** <@${infraction.modId}>\n`;
