@@ -1,55 +1,63 @@
 const db = require('./database');
 
 /**
- * Ajoute une infraction (transaction) dans la base de données.
- * @param {object} infraction - L'objet contenant les détails de l'infraction.
- * @param {string} infraction.guildId - L'ID du serveur.
- * @param {string} infraction.userId - L'ID de l'utilisateur sanctionné.
- * @param {string} infraction.type - Le type d'infraction (warn, mute, kick, ban).
- * @param {string} infraction.reason - La raison de l'infraction.
- * @param {string} infraction.modId - L'ID du modérateur.
+ * Ajoute une infraction dans la table Transaction de MySQL.
  */
 async function addToCasier({ guildId, userId, type, reason, modId }) {
-    const query = `
-        INSERT INTO Transaction (senderId, recipientId, amount, type, crewId, reason, modId)
-        VALUES (?, ?, 0, ?, ?, ?, ?)
-    `;
-    await db.execute(query, [modId, userId, type.toUpperCase(), guildId, reason, modId]);
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // 1. S'assurer que le MODÉRATEUR existe
+        await connection.execute(
+            'INSERT INTO User (id, username, balance) VALUES (?, ?, 0) ON DUPLICATE KEY UPDATE id=id',
+            [modId, 'Modérateur']
+        );
+
+        // 2. S'assurer que l'UTILISATEUR CIBLE existe
+        await connection.execute(
+            'INSERT INTO User (id, username, balance) VALUES (?, ?, 0) ON DUPLICATE KEY UPDATE id=id',
+            [userId, 'Utilisateur']
+        );
+
+        // 3. Insérer l'infraction (On met NULL dans crewId car c'est une action de modération globale au serveur)
+        const query = `
+            INSERT INTO Transaction (senderId, recipientId, amount, type, guildId, crewId, reason, modId)
+            VALUES (?, ?, 0, ?, ?, NULL, ?, ?)
+        `;
+
+        await connection.execute(query, [modId, userId, type.toUpperCase(), guildId, reason, modId]);
+
+        await connection.commit();
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
+        connection.release();
+    }
 }
 
 /**
- * Récupère le casier judiciaire (toutes les infractions) d'un utilisateur.
- * @param {string} guildId - L'ID du serveur.
- * @param {string} userId - L'ID de l'utilisateur.
- * @returns {Promise<Array>} - Un tableau d'objets d'infraction.
+ * Récupère les infractions depuis MySQL.
  */
 async function getCasier(guildId, userId) {
     const query = `
         SELECT id, type, reason, modId, createdAt as date
         FROM Transaction
-        WHERE recipientId = ? AND crewId = ? AND type IN ('WARN', 'MUTE', 'KICK', 'BAN', 'UNBAN', 'UNMUTE', 'NOTE')
+        WHERE recipientId = ? AND guildId = ? AND type IN ('WARN', 'MUTE', 'KICK', 'BAN', 'UNBAN', 'UNMUTE', 'NOTE')
         ORDER BY createdAt ASC
     `;
     const [rows] = await db.execute(query, [userId, guildId]);
     return rows;
 }
 
-/**
- * Supprime un avertissement spécifique du casier d'un utilisateur.
- * @param {number} infractionId - L'ID de l'infraction (transaction) à supprimer.
- */
 async function removeWarn(infractionId) {
-    const query = 'DELETE FROM Transaction WHERE id = ? AND type = \'WARN\'';
+    const query = "DELETE FROM Transaction WHERE id = ? AND type = 'WARN'";
     await db.execute(query, [infractionId]);
 }
 
-/**
- * Met à jour la raison d'un avertissement spécifique.
- * @param {number} infractionId - L'ID de l'infraction (transaction) à modifier.
- * @param {string} newReason - La nouvelle raison.
- */
 async function updateWarn(infractionId, newReason) {
-    const query = 'UPDATE Transaction SET reason = ? WHERE id = ? AND type = \'WARN\'';
+    const query = "UPDATE Transaction SET reason = ? WHERE id = ? AND type = 'WARN'";
     await db.execute(query, [newReason, infractionId]);
 }
 

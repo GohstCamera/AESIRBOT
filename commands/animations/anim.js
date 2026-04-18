@@ -1,7 +1,5 @@
 const {
     SlashCommandBuilder,
-    PermissionFlagsBits,
-    ChannelType,
     EmbedBuilder,
     ActionRowBuilder,
     StringSelectMenuBuilder,
@@ -10,7 +8,8 @@ const {
     TextInputStyle,
     ButtonBuilder,
     ButtonStyle,
-    ScheduledEntityType,
+    GuildScheduledEventEntityType,
+    ChannelType
 } = require('discord.js');
 const animationManager = require('./animationManager.js');
 const moment = require('moment');
@@ -22,7 +21,7 @@ module.exports = {
         .setDescription('Créer un événement programmé.')
         .addChannelOption(option => 
             option.setName('canal')
-                .setDescription('Le canal où envoyer l\'animation (optionnel, sinon choix interactif)')
+                .setDescription('Le canal où envoyer l\'animation')
                 .addChannelTypes(ChannelType.GuildText)
                 .setRequired(false)
         ),
@@ -32,19 +31,10 @@ module.exports = {
         const hasPermission = require('../../utils/hasPermission');
 
         if (!interaction.member.roles.cache.has(requiredRoleId) && !hasPermission(interaction, ['Administrator'])) {
-            return interaction.reply({
-                content: '❌ Vous n\'avez pas la permission d\'utiliser cette commande.',
-                ephemeral: true
-            });
+            return interaction.reply({ content: '❌ Vous n\'avez pas la permission d\'utiliser cette commande.', ephemeral: true });
         }
 
-        // Utilisation de deferReply pour éviter le timeout de 3s
-        try {
-            await interaction.deferReply({ ephemeral: true });
-        } catch (e) {
-            console.error("Erreur lors du deferReply:", e);
-            return;
-        }
+        await interaction.deferReply({ ephemeral: true });
 
         const providedChannel = interaction.options.getChannel('canal');
         const interactionId = uuidv4();
@@ -55,20 +45,14 @@ module.exports = {
                 .setLabel('📝 Remplir les détails')
                 .setStyle(ButtonStyle.Primary);
 
-            const row = new ActionRowBuilder().addComponents(button);
             await interaction.editReply({
-                content: `Vous avez choisi le canal ${providedChannel}. Cliquez sur le bouton pour continuer.`,
-                components: [row],
+                content: `📍 Canal de publication choisi : ${providedChannel}.`,
+                components: [new ActionRowBuilder().addComponents(button)],
             });
         } else {
-            const embed = new EmbedBuilder()
-                .setTitle('Création d\'une nouvelle animation')
-                .setDescription('Veuillez sélectionner le canal dans lequel l\'animation sera publiée.')
-                .setColor('#3498db');
-
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId(`anim_channel_select_${interactionId}`)
-                .setPlaceholder('Choisir un canal...')
+                .setPlaceholder('Choisir un salon textuel...')
                 .addOptions(
                     interaction.guild.channels.cache
                         .filter(c => c.type === ChannelType.GuildText)
@@ -76,19 +60,15 @@ module.exports = {
                         .slice(0, 25)
                 );
 
-            const row = new ActionRowBuilder().addComponents(selectMenu);
-
             await interaction.editReply({
-                embeds: [embed],
-                components: [row],
+                content: '📢 Veuillez sélectionner le salon de publication :',
+                components: [new ActionRowBuilder().addComponents(selectMenu)],
             });
         }
     },
 
     async handleChannelSelect(interaction) {
-        // ACCUSÉ DE RÉCEPTION de l'interaction de sélection
         await interaction.deferUpdate();
-
         const interactionId = interaction.customId.split('_')[3];
         const channelId = interaction.values[0];
 
@@ -97,17 +77,13 @@ module.exports = {
             .setLabel('📝 Remplir les détails')
             .setStyle(ButtonStyle.Primary);
 
-        const row = new ActionRowBuilder().addComponents(button);
-
         await interaction.editReply({
-            content: `Vous avez sélectionné le canal <#${channelId}>. Cliquez sur le bouton pour continuer.`,
-            embeds: [],
-            components: [row]
+            content: `✅ Salon sélectionné : <#${channelId}>.`,
+            components: [new ActionRowBuilder().addComponents(button)]
         });
     },
 
     async handleShowModal(interaction) {
-        // Pas de deferUpdate ici car showModal est une réponse directe
         const interactionId = interaction.customId.split('_')[3];
         const channelId = interaction.customId.split('_')[4];
 
@@ -115,27 +91,19 @@ module.exports = {
             .setCustomId(`anim_details_modal_${interactionId}_${channelId}`)
             .setTitle('Détails de l\'animation');
 
-        const titleInput = new TextInputBuilder().setCustomId('title').setLabel("Titre").setStyle(TextInputStyle.Short).setRequired(true);
-        const descriptionInput = new TextInputBuilder().setCustomId('description').setLabel("Description").setStyle(TextInputStyle.Paragraph).setRequired(true);
-        const dateInput = new TextInputBuilder().setCustomId('date').setLabel("Date (JJ/MM/AAAA)").setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Ex: 25/12/2024');
-        const timeInput = new TextInputBuilder().setCustomId('time').setLabel("Heure (HH:MM)").setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Ex: 21:00');
-        const placesInput = new TextInputBuilder().setCustomId('places').setLabel("Places (0 = illimité)").setStyle(TextInputStyle.Short).setRequired(false).setValue('0');
-
         modal.addComponents(
-            new ActionRowBuilder().addComponents(titleInput),
-            new ActionRowBuilder().addComponents(descriptionInput),
-            new ActionRowBuilder().addComponents(dateInput),
-            new ActionRowBuilder().addComponents(timeInput),
-            new ActionRowBuilder().addComponents(placesInput)
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('title').setLabel("Titre de l'événement").setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder("Ex: Tournoi Valorant")),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('description').setLabel("Description").setStyle(TextInputStyle.Paragraph).setRequired(true).setPlaceholder("Décrivez l'animation...")),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('date').setLabel("Date (JJ/MM/AAAA)").setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder("Ex: 25/12/2024")),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('time').setLabel("Heure (HH:MM)").setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder("Ex: 21:00")),
+            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('places').setLabel("Nombre de places (0 = illimité)").setStyle(TextInputStyle.Short).setRequired(false).setValue('0'))
         );
 
         await interaction.showModal(modal);
     },
 
     async handleModalSubmit(interaction) {
-        // Accusé de réception de la soumission du modal
         await interaction.deferUpdate();
-
         const interactionId = interaction.customId.split('_')[3];
         const channelId = interaction.customId.split('_')[4];
 
@@ -146,76 +114,42 @@ module.exports = {
         const slots = parseInt(interaction.fields.getTextInputValue('places') || '0', 10) || 0;
 
         const animationDateTime = moment(`${date} ${time}`, 'DD/MM/YYYY HH:mm', true);
+        if (!animationDateTime.isValid()) return interaction.followUp({ content: '❌ Format de date ou d\'heure invalide (JJ/MM/AAAA HH:MM).', ephemeral: true });
+        if (animationDateTime.isBefore(moment())) return interaction.followUp({ content: '❌ La date ne peut pas être dans le passé.', ephemeral: true });
 
-        if (!animationDateTime.isValid()) {
-            return interaction.followUp({ content: '❌ Format de date ou d\'heure invalide.', ephemeral: true });
-        }
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`anim_type_online_${interactionId}`).setLabel('En ligne').setStyle(ButtonStyle.Primary).setEmoji('💻'),
+            new ButtonBuilder().setCustomId(`anim_type_physical_${interactionId}`).setLabel('En physique').setStyle(ButtonStyle.Secondary).setEmoji('📍')
+        );
 
-        if (animationDateTime.isBefore(moment())) {
-            return interaction.followUp({ content: '❌ La date ne peut pas être dans le passé.', ephemeral: true });
-        }
-
-        const onlineButton = new ButtonBuilder()
-            .setCustomId(`anim_type_online_${interactionId}`)
-            .setLabel('En ligne')
-            .setStyle(ButtonStyle.Primary)
-            .setEmoji('💻');
-
-        const physicalButton = new ButtonBuilder()
-            .setCustomId(`anim_type_physical_${interactionId}`)
-            .setLabel('En physique')
-            .setStyle(ButtonStyle.Secondary)
-            .setEmoji('📍');
-
-        const row = new ActionRowBuilder().addComponents(onlineButton, physicalButton);
-
-        const embed = new EmbedBuilder()
-            .setTitle('📍 Type d\'événement')
-            .setDescription('Où se déroulera l\'animation ?')
-            .setColor('#3498db');
-
-        animationManager.setTempData(interactionId, {
-            channelId, title, description, date, time, slots,
-            author: { tag: interaction.user.tag, avatar: interaction.user.displayAvatarURL() }
-        });
+        animationManager.setTempData(interactionId, { channelId, title, description, date, time, slots });
 
         await interaction.editReply({
-            content: 'Dernière étape : choix du type d\'événement.',
-            embeds: [embed],
+            content: '📍 **Dernière étape** : Où se déroulera l\'animation ?',
             components: [row]
         });
     },
 
     async handleEventTypeSelect(interaction) {
-        await interaction.deferUpdate();
-
         const parts = interaction.customId.split('_');
         const eventType = parts[2];
         const interactionId = parts[3];
 
-        const animData = animationManager.getTempData(interactionId);
-        if (!animData) {
-            return interaction.editReply({ content: '❌ Données expirées.', embeds: [], components: [] });
-        }
-
         if (eventType === 'online') {
+            await interaction.deferUpdate();
             const entityOptions = {
-                entityType: ScheduledEntityType.External,
+                entityType: GuildScheduledEventEntityType.External,
                 entityMetadata: { location: 'Discord AESIR' },
             };
             await this.createScheduledEvent(interaction, interactionId, entityOptions);
         } else if (eventType === 'physical') {
             const addressModal = new ModalBuilder()
                 .setCustomId(`anim_address_modal_${interactionId}`)
-                .setTitle('Adresse de l\'événement');
+                .setTitle('Lieu de l\'événement');
 
-            const addressInput = new TextInputBuilder()
-                .setCustomId('address')
-                .setLabel("Adresse complète")
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true);
-
-            addressModal.addComponents(new ActionRowBuilder().addComponents(addressInput));
+            addressModal.addComponents(new ActionRowBuilder().addComponents(
+                new TextInputBuilder().setCustomId('address').setLabel("Adresse complète").setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder("Ex: 123 Rue de l'Exemple, Clermont-Ferrand")
+            ));
             await interaction.showModal(addressModal);
         }
     },
@@ -230,7 +164,7 @@ module.exports = {
 
         const address = interaction.fields.getTextInputValue('address');
         const entityOptions = {
-            entityType: ScheduledEntityType.External,
+            entityType: GuildScheduledEventEntityType.External,
             entityMetadata: { location: address },
         };
 
@@ -239,33 +173,76 @@ module.exports = {
 
     async createScheduledEvent(interaction, interactionId, entityOptions) {
         const animData = animationManager.getTempData(interactionId);
-        const { title, description, date, time, slots } = animData;
+        const { channelId, title, description, date, time, slots } = animData;
         const animationDateTime = moment(`${date} ${time}`, 'DD/MM/YYYY HH:mm');
-
-        const eventDescription = `${description}\n\n--------------------\nPlaces : ${slots === 0 ? 'Illimitées' : slots}`;
+        const logChannelId = '1002927821154418738';
 
         try {
             const scheduledEvent = await interaction.guild.scheduledEvents.create({
                 name: title,
-                description: eventDescription,
+                description: `${description}\n\n👥 Places : ${slots === 0 ? 'Illimitées' : slots}`,
                 scheduledStartTime: animationDateTime.toDate(),
+                scheduledEndTime: new Date(animationDateTime.toDate().getTime() + 3 * 3600000), // +3h par défaut
                 privacyLevel: 2,
                 ...entityOptions,
             });
 
+            // --- 1. Beau message pour l'utilisateur ---
             const successEmbed = new EmbedBuilder()
-                .setTitle('✅ Événement créé !')
-                .setDescription(`L'événement **${title}** a été programmé.`)
+                .setTitle('📅 Animation Programmée !')
+                .setDescription(`L'événement **${title}** a été créé avec succès.`)
+                .setColor('#2ecc71')
+                .addFields(
+                    { name: '📍 Lieu', value: `${entityOptions.entityMetadata.location}`, inline: true },
+                    { name: '⏰ Date & Heure', value: `<t:${Math.floor(animationDateTime.valueOf() / 1000)}:F>`, inline: true },
+                    { name: '👥 Places', value: `${slots === 0 ? 'Illimitées' : slots}`, inline: true }
+                )
                 .setURL(scheduledEvent.url)
-                .setColor('#2ecc71');
+                .setThumbnail(interaction.guild.iconURL())
+                .setTimestamp();
 
-            await interaction.editReply({ content: '', embeds: [successEmbed], components: [] });
+            await interaction.editReply({ content: null, embeds: [successEmbed], components: [] });
+
+            // --- 2. Log automatique ---
+            const logChannel = interaction.guild.channels.cache.get(logChannelId);
+            if (logChannel && logChannel.type === ChannelType.GuildText) {
+                const logEmbed = new EmbedBuilder()
+                    .setTitle('🛠️ Log : Création d\'animation')
+                    .setColor('#3498db')
+                    .setDescription(`Une nouvelle animation a été programmée par **${interaction.user.tag}**.`)
+                    .addFields(
+                        { name: '📝 Titre', value: title, inline: true },
+                        { name: '📅 Date', value: `${date} à ${time}`, inline: true },
+                        { name: '🔗 Lien', value: `[Accéder à l'événement](${scheduledEvent.url})`, inline: false }
+                    )
+                    .setFooter({ text: `ID Utilisateur : ${interaction.user.id}` })
+                    .setTimestamp();
+
+                await logChannel.send({ embeds: [logEmbed] });
+            }
+
+            // --- 3. Notification dans le salon choisi ---
+            const targetChannel = interaction.guild.channels.cache.get(channelId);
+            if (targetChannel) {
+                const publicEmbed = new EmbedBuilder()
+                    .setTitle(`📣 Nouvelle Animation : ${title}`)
+                    .setDescription(description)
+                    .setColor('#f1c40f')
+                    .addFields(
+                        { name: '⏰ Quand ?', value: `<t:${Math.floor(animationDateTime.valueOf() / 1000)}:F>`, inline: false },
+                        { name: '📍 Où ?', value: entityOptions.entityMetadata.location, inline: true },
+                        { name: '👥 Places', value: `${slots === 0 ? 'Illimitées' : slots}`, inline: true }
+                    )
+                    .setFooter({ text: `Organisé par ${interaction.user.username}` })
+                    .setTimestamp();
+
+                await targetChannel.send({ content: '@everyone', embeds: [publicEmbed] });
+            }
 
         } catch (error) {
-            console.error(error);
-            await interaction.editReply({ content: `❌ Erreur lors de la création de l'événement.` });
+            console.error("Erreur création évent :", error);
+            await interaction.editReply({ content: `❌ Erreur lors de la création de l'événement. Vérifiez mes permissions.` });
         }
-
         animationManager.clearTempData(interactionId);
     },
 
